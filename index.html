@@ -1,0 +1,1908 @@
+<!DOCTYPE html>
+<html lang="zh-Hant-TW">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta name="theme-color" content="#173628">
+<title>Baseball Note</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Noto+Serif+TC:wght@400;500;600;700;900&display=swap">
+<link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" crossorigin="">
+<style>
+:root{
+  --bg:#ECF0EC;
+  --surface:#FFFFFF;
+  --paper:#FFFDF6;
+  --ink:#14211A;
+  --muted:#5B6A61;
+  --faint:#8B978F;
+  --line:#D3DCD5;
+  --board:#173628;
+  --board-hi:#21493A;
+  --board-dim:#2C4A3C;
+  --amber:#F7B538;
+  --chalk:#F2F5F0;
+  --chalk-dim:#A9BDB1;
+  --win:#C22F2B;
+  --loss:#2A4C9C;
+  --tie:#5F6E66;
+  /* 全站使用思源宋體（Noto Serif TC）；沒有網路時退回系統內建的宋體／明體 */
+  --serif:"Noto Serif TC","Noto Serif CJK TC","Source Han Serif TC","Source Han Serif","思源宋體","Songti TC","PMingLiU","MingLiU",serif;
+  --num:var(--serif);
+  --sans:var(--serif);
+  --stub:104px;
+  --nav-h:64px;
+}
+*{box-sizing:border-box}
+[hidden]{display:none!important}
+html{-webkit-text-size-adjust:100%}
+body{margin:0;background:var(--bg);color:var(--ink);font-family:var(--serif);font-size:15px;line-height:1.7;font-feature-settings:"lnum" 1,"tnum" 1;-webkit-font-smoothing:antialiased}
+a{color:inherit}
+button{font-family:inherit}
+:focus-visible{outline:3px solid var(--amber);outline-offset:2px}
+.wrap{max-width:1120px;margin:0 auto;padding-left:max(16px,env(safe-area-inset-left));padding-right:max(16px,env(safe-area-inset-right))}
+.sr-only{position:absolute;width:1px;height:1px;overflow:hidden;clip:rect(0 0 0 0);white-space:nowrap}
+
+/* ---------- Top bar & tabs ---------- */
+.topbar{background:var(--board);color:var(--chalk);position:sticky;top:0;z-index:1100;padding-top:env(safe-area-inset-top)}
+.topbar-inner{display:flex;align-items:center;justify-content:space-between;gap:16px;height:60px}
+.brand{display:flex;align-items:center;gap:10px;min-width:0}
+.brand svg{width:30px;height:30px;flex:none}
+.brand h1{font-family:var(--serif);font-weight:700;font-size:24px;margin:0;line-height:1;letter-spacing:.02em;white-space:nowrap}
+.tabs{display:flex;gap:4px;background:rgba(255,255,255,.07);padding:4px;border-radius:12px}
+.tab{appearance:none;border:0;background:transparent;color:#C9D6CE;font-size:14px;padding:7px 14px;border-radius:9px;display:flex;align-items:center;gap:6px;cursor:pointer;white-space:nowrap}
+.tab svg{width:18px;height:18px;flex:none}
+.tab:hover{color:#fff}
+.tab[aria-selected="true"]{background:var(--amber);color:var(--board);font-weight:700}
+@media (max-width:760px){
+  .tabs{position:fixed;left:0;right:0;bottom:0;border-radius:0;background:var(--board);padding:6px 6px calc(6px + env(safe-area-inset-bottom));justify-content:space-around;box-shadow:0 -6px 20px rgba(0,0,0,.18);z-index:1100;gap:0}
+  .tab{flex-direction:column;gap:1px;font-size:11px;padding:5px 4px;flex:1;border-radius:8px}
+  .tab svg{width:22px;height:22px}
+  .tab[aria-selected="true"]{background:transparent;color:var(--amber)}
+  body{padding-bottom:calc(var(--nav-h) + env(safe-area-inset-bottom))}
+}
+
+main{padding:20px 0 48px}
+.tab-panel{display:grid;gap:16px}
+h2{font-size:17px;margin:0 0 12px;line-height:1.35}
+.panel{background:var(--surface);border:1px solid var(--line);border-radius:16px;padding:18px}
+.panel-head{display:flex;justify-content:space-between;align-items:baseline;gap:12px;flex-wrap:wrap;margin-bottom:12px}
+.panel-head h2{margin:0}
+.hint{font-size:13px;color:var(--muted);margin:0}
+
+/* ---------- Scoreboard ---------- */
+.board{background-color:var(--board);background-image:radial-gradient(rgba(255,255,255,.05) 1px,transparent 1.3px);background-size:6px 6px;color:var(--chalk);border-radius:18px;padding:16px 16px 14px}
+.board-head{display:flex;justify-content:space-between;align-items:center;gap:12px;font-size:13px;color:var(--chalk-dim);margin-bottom:10px;flex-wrap:wrap}
+.team-chip{display:inline-flex;align-items:center;gap:6px;background:rgba(255,255,255,.08);border-radius:999px;padding:3px 12px 3px 6px;color:var(--chalk);font-size:13px;border:0;cursor:pointer}
+.team-chip i{width:14px;height:14px;border-radius:50%;background:var(--c);box-shadow:0 0 0 2px rgba(255,255,255,.15)}
+.board-grid{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));border:1px solid rgba(255,255,255,.12);border-radius:12px;background:rgba(0,0,0,.16)}
+.cell{padding:12px 12px 14px;display:flex;flex-direction:column;gap:3px;min-width:0;overflow:hidden}
+.cell + .cell{border-left:1px solid rgba(255,255,255,.12)}
+.cell-label{font-size:12px;color:var(--chalk-dim)}
+.cell-num{font-family:var(--num);font-weight:700;font-size:clamp(32px,9vw,66px);line-height:1;letter-spacing:-.01em;color:var(--amber);text-shadow:0 0 18px rgba(247,181,56,.35);white-space:nowrap}
+.cell-num.long{font-size:clamp(23px,6.6vw,56px);line-height:1.3}
+.cell-num small{font-size:.42em;color:#C9D6CE;text-shadow:none;margin-left:2px;font-weight:700}
+.cell-sub{font-size:12px;color:#C9D6CE;line-height:1.4}
+.bulbs{display:grid;grid-template-columns:repeat(6,9px);gap:5px;margin-top:4px}
+.bulb{width:9px;height:9px;border-radius:50%;background:#2D4A3D;box-shadow:inset 0 1px 2px rgba(0,0,0,.5)}
+.bulb.on{background:var(--amber);box-shadow:0 0 7px rgba(247,181,56,.75)}
+.board-foot{display:flex;align-items:center;gap:10px;margin-top:12px;font-size:12px;color:var(--chalk-dim);flex-wrap:wrap}
+.recent{display:flex;gap:4px;flex-wrap:wrap}
+.recent span{width:22px;height:22px;border-radius:5px;display:grid;place-items:center;font-size:11px;font-weight:700;color:#fff;background:#2D4A3D}
+.recent .W{background:var(--win)}
+.recent .L{background:var(--loss)}
+.recent .T{background:var(--tie)}
+.recent .P{color:var(--chalk-dim)}
+.recent .E{background:transparent;border:1px dashed rgba(255,255,255,.18)}
+.streak{margin-left:auto;color:var(--amber);font-weight:700;font-size:13px}
+@media (max-width:420px){
+  .cell{padding:10px 8px 12px}
+  .bulbs{grid-template-columns:repeat(6,7px);gap:4px}
+  .bulb{width:7px;height:7px}
+}
+
+/* ---------- Overview ---------- */
+.overview-grid{display:grid;gap:16px}
+@media (min-width:900px){.overview-grid{grid-template-columns:minmax(0,1.55fr) minmax(0,1fr)}}
+.map{height:380px;border-radius:12px;overflow:hidden;background:#DCE4DE;position:relative;z-index:0}
+@media (min-width:900px){
+  .map-panel{display:flex;flex-direction:column}
+  .map{height:auto;min-height:470px;flex:1}
+}
+.map-fallback{position:absolute;inset:0;display:grid;place-items:center;text-align:center;padding:24px;color:var(--muted);font-size:14px}
+.legend{display:flex;gap:14px;font-size:12px;color:var(--muted)}
+.legend span{display:inline-flex;align-items:center;gap:5px}
+.legend i{width:10px;height:10px;border-radius:50%;display:inline-block}
+.legend .on{background:var(--amber);border:2px solid var(--board)}
+.legend .off{background:#fff;border:2px solid var(--faint)}
+.region-title{font-size:12px;color:var(--muted);margin:10px 0 2px;font-weight:600}
+.region-title:first-child{margin-top:0}
+.park-list{list-style:none;margin:0;padding:0}
+.park-row{display:grid;grid-template-columns:auto minmax(0,1fr) auto;gap:10px;align-items:center;padding:7px 8px;border-radius:10px;cursor:pointer;border:0;background:none;width:100%;text-align:left;color:var(--faint);font-size:14px}
+.park-row:hover{background:#F0F4F1}
+.park-dot{width:11px;height:11px;border-radius:50%;border:2px solid #B5C0B8;background:#fff}
+.park-row.on{color:var(--ink)}
+.park-row.on .park-dot{background:var(--amber);border-color:var(--board)}
+.park-name{font-weight:600;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.park-name small{font-weight:400;color:var(--muted);margin-left:6px;font-size:12px}
+.park-count{font-family:var(--num);font-weight:700;font-size:22px;line-height:1;text-align:right}
+.park-count small{font-family:var(--sans);font-size:11px;font-weight:400;color:var(--muted);margin-left:2px}
+.badges{display:grid;grid-template-columns:repeat(auto-fill,minmax(200px,1fr));gap:10px}
+.badge{display:flex;gap:12px;align-items:center;padding:10px 12px;border-radius:12px;border:1.5px dashed #C4CEC7;color:var(--faint)}
+.badge.on{border-style:solid;border-color:var(--board);color:var(--ink);background:#F7F9F5}
+.badge-icon{width:40px;height:40px;border-radius:50%;flex:none;display:grid;place-items:center;background:#E5EBE6;font-family:var(--num);font-weight:700;font-size:15px;color:#9BA79F}
+.badge-icon.sm{font-size:12px}
+.badge.on .badge-icon{background:var(--amber);color:var(--board);box-shadow:0 0 0 3px var(--board) inset}
+.badge-text b{display:block;font-size:14px;line-height:1.3}
+.badge-text span{font-size:12px;line-height:1.4;display:block}
+
+/* ---------- Map pins & popups ---------- */
+.pin-wrap{background:none;border:0}
+.pin{width:26px;height:26px;border-radius:50% 50% 50% 0;transform:rotate(-45deg);background:#fff;border:2px solid #8B978F;display:grid;place-items:center;box-shadow:0 2px 6px rgba(0,0,0,.28)}
+.pin span{transform:rotate(45deg);font-family:var(--num);font-weight:700;font-size:14px;color:var(--board);line-height:1}
+.pin:not(.on) span{width:7px;height:7px;border-radius:50%;background:#8B978F}
+.pin.on{width:34px;height:34px;background:var(--amber);border:2.5px solid var(--board);box-shadow:0 0 0 4px rgba(247,181,56,.35),0 3px 8px rgba(0,0,0,.35)}
+.leaflet-container{font-family:var(--sans)}
+.leaflet-popup-content-wrapper{border-radius:14px}
+.leaflet-popup-content{margin:14px 16px;min-width:200px;line-height:1.5}
+.pop strong{font-size:15px;display:block;color:var(--ink)}
+.pop-city{font-size:12px;color:var(--muted)}
+.pop-stats{display:grid;grid-template-columns:repeat(3,1fr);gap:6px;margin:10px 0 12px;text-align:center}
+.pop-stats div{background:#F1F5F2;border-radius:8px;padding:6px 2px}
+.pop-stats b{display:block;font-family:var(--num);font-size:24px;font-weight:700;line-height:1;color:var(--ink)}
+.pop-stats span{font-size:11px;color:var(--muted)}
+.pop-empty{font-size:13px;color:var(--muted);margin:8px 0 12px}
+.pop .btn{min-height:38px;padding:6px 12px;font-size:13px;width:100%}
+
+/* ---------- Buttons & form ---------- */
+.btn{appearance:none;border:0;font-weight:700;font-size:15px;border-radius:12px;padding:10px 18px;cursor:pointer;display:inline-flex;align-items:center;justify-content:center;gap:8px;min-height:46px;text-decoration:none;line-height:1.2;transition:background-color .15s}
+.btn svg{width:19px;height:19px;flex:none}
+.btn-primary{background:var(--board);color:var(--chalk)}
+.btn-primary:hover{background:var(--board-hi)}
+.btn-amber{background:var(--amber);color:var(--board)}
+.btn-amber:hover{background:#FFC555}
+.btn-ghost{background:transparent;color:var(--ink);border:1.5px solid var(--line)}
+.btn-ghost:hover{background:#F0F4F1}
+.btn-danger{background:var(--win);color:#fff}
+.btn-lg{min-height:58px;font-size:17px;width:100%;border-radius:14px}
+.btn[disabled]{opacity:.6;cursor:progress}
+.btn-row{display:flex;gap:10px;flex-wrap:wrap}
+
+.checkin-grid{display:grid;gap:16px;align-items:start}
+@media (min-width:900px){.checkin-grid{grid-template-columns:minmax(0,1fr) minmax(0,1.35fr)}.gps-panel{position:sticky;top:80px}}
+.gps-panel p{margin:0 0 14px;font-size:14px;color:var(--muted)}
+.gps-status{margin-top:12px;font-size:14px;border-radius:12px;padding:12px 14px;background:#F1F5F2;line-height:1.6}
+.gps-status.ok{background:#E5F2E7;border:1px solid #B7D8BD}
+.gps-status.warn{background:#FFF5DC;border:1px solid #EED196}
+.gps-status.err{background:#FBEAE7;border:1px solid #EBC1BA}
+.gps-status small{display:block;color:var(--muted);font-size:12px;margin-top:4px}
+.near-list{display:flex;flex-wrap:wrap;gap:8px;margin-top:10px}
+.chip{border:1.5px solid var(--line);background:#fff;border-radius:999px;padding:6px 12px;font-size:13px;cursor:pointer;color:var(--ink)}
+.chip:hover{border-color:var(--board)}
+.chip b{font-family:var(--num);font-size:16px;margin-left:4px}
+.spinner{display:inline-block;width:16px;height:16px;border:2.5px solid currentColor;border-right-color:transparent;border-radius:50%;animation:spin .8s linear infinite;vertical-align:-3px;margin-right:6px}
+@keyframes spin{to{transform:rotate(360deg)}}
+
+.form-title{display:flex;justify-content:space-between;align-items:center;gap:10px;margin-bottom:12px}
+.form-title h2{margin:0}
+.field{display:flex;flex-direction:column;gap:6px;margin-bottom:14px;min-width:0}
+.field-label{font-size:13px;font-weight:700;color:var(--muted)}
+.field-label em{font-style:normal;font-weight:400;color:var(--faint);margin-left:4px}
+.input,.select,.textarea{font-family:inherit;font-size:16px;color:var(--ink);background:#fff;border:1.5px solid var(--line);border-radius:10px;padding:10px 12px;min-height:46px;width:100%;max-width:100%}
+.select{appearance:none;-webkit-appearance:none;padding-right:36px;background-image:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='8' viewBox='0 0 12 8'%3E%3Cpath d='M1 1l5 5 5-5' fill='none' stroke='%235B6A61' stroke-width='2'/%3E%3C/svg%3E");background-repeat:no-repeat;background-position:right 12px center}
+input[type="date"].input{appearance:none;-webkit-appearance:none;display:block}
+.textarea{min-height:104px;resize:vertical;line-height:1.6}
+.input:focus,.select:focus,.textarea:focus{outline:none;border-color:var(--board);box-shadow:0 0 0 3px rgba(247,181,56,.5)}
+.row-2{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:12px}
+@media (max-width:400px){.row-2.stack-xs{grid-template-columns:1fr}}
+.seg{display:inline-flex;background:#E3E9E4;border-radius:11px;padding:3px;gap:3px;flex-wrap:wrap}
+.seg input{position:absolute;opacity:0;pointer-events:none}
+.seg label{padding:7px 16px;border-radius:8px;font-size:14px;cursor:pointer;font-weight:700;color:var(--muted);user-select:none}
+.seg input:checked + label{background:#fff;color:var(--ink);box-shadow:0 1px 3px rgba(0,0,0,.14)}
+.seg input:focus-visible + label{outline:3px solid var(--amber)}
+.role-line{display:flex;align-items:center;gap:10px;flex-wrap:wrap;margin-bottom:12px}
+.role-line .field-label{margin:0}
+
+.scorebox{display:grid;grid-template-columns:minmax(0,1fr) auto minmax(0,1fr);align-items:end;gap:10px;background-color:var(--board);background-image:radial-gradient(rgba(255,255,255,.05) 1px,transparent 1.3px);background-size:6px 6px;border-radius:14px;padding:14px;color:var(--chalk)}
+.score-side label{display:flex;align-items:center;gap:6px;font-size:13px;margin-bottom:6px;color:#C9D6CE;min-width:0}
+.score-side label span:last-child{white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.side-tag{font-size:11px;padding:0 6px;border-radius:4px;background:rgba(255,255,255,.12);flex:none;line-height:18px}
+.score-side.me label{color:var(--amber);font-weight:700}
+.score-side.me .side-tag{background:var(--amber);color:var(--board)}
+.score-input{width:100%;font-family:var(--num);font-weight:700;font-size:42px;text-align:center;background:rgba(0,0,0,.28);border:1.5px solid rgba(255,255,255,.14);color:var(--amber);border-radius:10px;height:70px;padding:0;-moz-appearance:textfield}
+.score-input::-webkit-outer-spin-button,.score-input::-webkit-inner-spin-button{-webkit-appearance:none;margin:0}
+.score-input::placeholder{color:#4A6657}
+.score-input:focus{outline:none;border-color:var(--amber);box-shadow:0 0 0 3px rgba(247,181,56,.35)}
+.score-colon{font-family:var(--num);font-size:38px;color:#7F978A;padding-bottom:14px;font-weight:700}
+.result-preview{display:flex;align-items:center;gap:12px;margin:12px 0 18px;font-size:14px;color:var(--muted);min-height:60px}
+.result-preview .stamp{width:58px;height:58px;flex:none}
+.result-preview b{color:var(--ink)}
+.form-error{background:#FBEAE7;border:1px solid #EBC1BA;color:#8A2420;border-radius:10px;padding:10px 12px;font-size:14px;margin-bottom:14px}
+.form-actions{display:flex;gap:10px;flex-wrap:wrap;margin-top:4px}
+.form-actions .btn-primary{flex:1 1 200px}
+.inline-link{font-size:13px;color:var(--loss);font-weight:600;text-decoration:none}
+.inline-link:hover{text-decoration:underline}
+
+/* ---------- 比賽資料帶入 ---------- */
+.match-box{border-radius:12px;padding:12px 14px;margin:0 0 16px;font-size:14px;line-height:1.6;background:#EDF4EE;border:1px solid #C6DACB}
+.match-box.empty{background:#F4F6F3;border-color:var(--line);color:var(--muted)}
+.match-box.need{border-color:var(--amber);box-shadow:0 0 0 3px rgba(247,181,56,.32)}
+.match-head{display:flex;justify-content:space-between;gap:8px;font-size:12.5px;color:var(--muted)}
+.match-line{display:grid;grid-template-columns:minmax(0,1fr) auto minmax(0,1fr);align-items:center;gap:10px;margin:4px 0 2px}
+.match-team{font-weight:700;display:flex;align-items:center;gap:6px;min-width:0}
+.match-team.home{justify-content:flex-end;text-align:right}
+.match-team i,.side-btn i{width:10px;height:10px;border-radius:3px;background:var(--c);flex:none}
+.match-team small{font-size:11px;font-weight:500;color:var(--muted);border:1px solid #BFCDC3;border-radius:4px;padding:0 4px;line-height:16px;flex:none}
+.match-score{font-size:24px;font-weight:700;white-space:nowrap}
+.match-players{font-size:12.5px;color:var(--muted);display:flex;flex-wrap:wrap;gap:0 12px;margin-top:2px}
+.match-players b{color:var(--ink);font-weight:600;margin-left:3px}
+.match-sub{display:block;font-size:13px;margin-top:6px}
+.side-pick{display:flex;flex-wrap:wrap;gap:8px;align-items:center;margin-top:10px;font-size:13px;color:var(--muted)}
+.match-box.need .side-pick > span{color:#8A5A00;font-weight:700}
+.side-btn{appearance:none;border:1.5px solid #BFCDC3;background:#fff;border-radius:999px;padding:5px 13px;font-size:14px;font-weight:600;color:var(--ink);cursor:pointer;display:inline-flex;align-items:center;gap:6px}
+.side-btn:hover{border-color:var(--board)}
+.side-btn.on{background:var(--board);border-color:var(--board);color:var(--chalk)}
+.btn-sm{min-height:38px;padding:6px 14px;font-size:14px;margin-top:10px}
+.chip-sub{font-size:12px;color:var(--muted);margin-left:6px}
+.players{border:0;padding:0;margin:0 0 14px;min-width:0}
+.players legend{padding:0;margin-bottom:8px}
+.players-grid{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:10px 12px}
+@media (min-width:620px){.players-grid{grid-template-columns:repeat(3,minmax(0,1fr))}}
+.mini{display:flex;flex-direction:column;gap:4px;font-size:12.5px;color:var(--muted);min-width:0}
+.mini .input{min-height:42px;padding:8px 10px}
+
+/* ---------- Tickets ---------- */
+.toolbar{display:flex;flex-wrap:wrap;gap:10px;align-items:center}
+.toolbar .select{width:auto;min-width:130px;min-height:42px;font-size:15px}
+.toolbar .count{margin-left:auto;font-size:13px;color:var(--muted)}
+.ticket-list{display:grid;gap:20px}
+@media (min-width:980px){.ticket-list{grid-template-columns:repeat(2,minmax(0,1fr))}}
+.season-head{grid-column:1/-1;display:flex;align-items:baseline;gap:12px;margin:10px 0 -6px;flex-wrap:wrap}
+.season-head:first-child{margin-top:0}
+.season-head h3{font-family:var(--num);font-size:30px;font-weight:700;margin:0;line-height:1}
+.season-head span{font-size:13px;color:var(--muted)}
+.ticket-wrap{display:grid;filter:drop-shadow(0 1px 0 rgba(20,33,26,.10)) drop-shadow(0 10px 16px rgba(20,33,26,.13));min-width:0}
+.ticket{--team:#8A948E;position:relative;display:grid;grid-template-columns:minmax(0,1fr) var(--stub);background:var(--paper);border-radius:12px;min-height:196px;
+  -webkit-mask:radial-gradient(circle 11px at calc(100% - var(--stub)) 0,#0000 97%,#000) top/100% 51% no-repeat,radial-gradient(circle 11px at calc(100% - var(--stub)) 100%,#0000 97%,#000) bottom/100% 51% no-repeat;
+  mask:radial-gradient(circle 11px at calc(100% - var(--stub)) 0,#0000 97%,#000) top/100% 51% no-repeat,radial-gradient(circle 11px at calc(100% - var(--stub)) 100%,#0000 97%,#000) bottom/100% 51% no-repeat}
+.ticket::before{content:"";position:absolute;left:0;top:0;bottom:0;width:12px;background:var(--team);border-radius:12px 0 0 12px}
+.ticket::after{content:"";position:absolute;left:12px;top:0;bottom:0;width:3px;background:var(--opp,transparent);opacity:.85}
+.t-main{padding:14px 14px 14px 28px;display:flex;flex-direction:column;gap:5px;min-width:0}
+.t-top{display:flex;justify-content:space-between;align-items:center;gap:8px}
+.t-date{font-family:var(--num);font-weight:700;font-size:18px;line-height:1.1;letter-spacing:.02em}
+.t-date small{font-family:var(--sans);font-weight:500;font-size:12px;color:var(--muted);margin-left:4px;letter-spacing:0}
+.t-role{font-size:11px;font-weight:700;padding:1px 8px;border-radius:999px;border:1.5px solid currentColor;color:var(--muted);white-space:nowrap}
+.t-role.home{color:var(--board)}
+.t-park{font-weight:700;font-size:15px;line-height:1.3}
+.t-score{display:grid;grid-template-columns:minmax(0,1fr) auto minmax(0,1fr);align-items:end;gap:6px;margin:2px 0;padding:8px 0 6px;border-top:1px solid #E2E6DF;border-bottom:1px solid #E2E6DF}
+.t-team{display:flex;flex-direction:column;min-width:0}
+.t-team.home{align-items:flex-end;text-align:right}
+.t-name{font-size:13px;font-weight:600;display:flex;align-items:center;gap:5px;max-width:100%;min-width:0}
+.t-name .nm{white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.t-name i{width:9px;height:9px;border-radius:2px;background:var(--c);flex:none}
+.t-team.is-me .t-name{font-weight:700}
+.me-tag{font-size:10px;font-weight:700;background:var(--ink);color:var(--paper);border-radius:4px;padding:0 4px;line-height:16px;flex:none}
+.t-num{font-family:var(--num);font-weight:700;font-size:50px;line-height:1}
+.t-num.lose{color:#A3ADA6}
+.t-num.none{color:#C3CBC5}
+.t-vs{font-family:var(--num);font-size:28px;color:var(--faint);padding-bottom:6px;font-weight:700}
+.t-sp{grid-column:1/-1;display:grid;grid-template-columns:minmax(0,1fr) auto minmax(0,1fr);gap:6px;font-size:12px;color:var(--muted);margin-top:4px;line-height:1.4}
+.t-sp span{white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.t-sp .h{text-align:right}
+.t-sp em{font-style:normal;font-size:11px;color:var(--faint)}
+.t-dec{display:flex;flex-wrap:wrap;gap:4px 12px;font-size:12.5px;color:#2E3B34;line-height:1.5}
+.t-dec b{font-weight:600;font-size:10.5px;color:#fff;background:var(--muted);border-radius:4px;padding:1px 5px;margin-right:5px;vertical-align:1px}
+.t-dec .wp b{background:var(--win)}
+.t-dec .lp b{background:var(--loss)}
+.t-dec .mvp b{background:var(--amber);color:var(--board)}
+.t-meta{display:flex;flex-wrap:wrap;gap:4px 14px;font-size:12px;color:var(--muted);align-items:center}
+.t-link{color:var(--loss);font-weight:700;text-decoration:none;display:inline-flex;gap:3px;align-items:center}
+.t-link svg{width:13px;height:13px}
+.t-link:hover{text-decoration:underline}
+.t-notes{font-size:13.5px;line-height:1.65;margin:2px 0 0;color:#2E3B34;white-space:pre-wrap;word-break:break-word;display:-webkit-box;-webkit-line-clamp:3;-webkit-box-orient:vertical;overflow:hidden;cursor:pointer}
+.ticket.expanded .t-notes{display:block;-webkit-line-clamp:unset}
+.t-stub{position:relative;display:flex;flex-direction:column;align-items:center;justify-content:space-between;padding:14px 6px 8px;gap:4px;background-image:linear-gradient(to bottom,#B7C2BA 55%,transparent 0);background-size:2px 9px;background-repeat:repeat-y;background-position:left top}
+.stub-no{font-family:var(--num);font-size:13px;font-weight:700;color:var(--muted);letter-spacing:.04em;line-height:1}
+.stub-no b{font-size:20px;color:var(--ink);font-weight:700}
+.stub-seat{font-size:11px;color:var(--muted);text-align:center;line-height:1.3;word-break:break-all;max-width:100%;padding:0 2px}
+.stub-actions{display:flex;gap:2px}
+.icon-btn{appearance:none;border:0;background:transparent;width:34px;height:34px;border-radius:9px;display:grid;place-items:center;color:var(--muted);cursor:pointer}
+.icon-btn:hover{background:#EBF0EC;color:var(--ink)}
+.icon-btn.danger:hover{color:var(--win)}
+.icon-btn svg{width:17px;height:17px}
+@media (max-width:380px){:root{--stub:88px}.t-num{font-size:42px}.t-main{padding-right:10px}}
+
+/* ---------- Stamp ---------- */
+.stamp{--rot:-12deg;width:80px;height:80px;transform:rotate(var(--rot));mix-blend-mode:multiply;opacity:.9;color:var(--tie)}
+.stamp svg{width:100%;height:100%;display:block;overflow:visible}
+.stamp text{fill:currentColor;font-family:var(--serif);font-weight:900}
+.stamp .arc-num{font-family:var(--num);font-weight:700}
+.stamp.W{color:var(--win)}
+.stamp.L{color:var(--loss)}
+.stamp.T{color:var(--tie)}
+.stamp.P{color:#9AA59E;opacity:.75}
+@keyframes stampIn{0%{transform:rotate(var(--rot)) scale(2.3);opacity:0}55%{transform:rotate(var(--rot)) scale(.9);opacity:.95}78%{transform:rotate(var(--rot)) scale(1.05)}100%{transform:rotate(var(--rot)) scale(1);opacity:.9}}
+.stamp.is-new{animation:stampIn .6s cubic-bezier(.3,.7,.4,1) .35s both}
+@media (max-width:380px){.t-stub .stamp{width:70px;height:70px}}
+
+.empty{text-align:center;padding:36px 20px;border:2px dashed #C4CEC7;border-radius:16px;color:var(--muted);background:rgba(255,255,255,.5)}
+.empty h3{color:var(--ink);margin:0 0 6px;font-size:17px}
+.empty p{margin:0 0 16px;font-size:14px}
+.empty .btn-row{justify-content:center}
+
+/* ---------- Settings ---------- */
+.settings{display:grid;gap:16px;max-width:760px}
+.team-list{list-style:none;margin:0 0 12px;padding:0;display:grid;gap:6px}
+.team-list li{display:flex;align-items:center;gap:10px;padding:8px 10px;border:1px solid var(--line);border-radius:10px}
+.team-list i{width:18px;height:18px;border-radius:5px;background:var(--c);flex:none}
+.team-list span{flex:1;min-width:0}
+.add-team{display:grid;grid-template-columns:minmax(0,1fr) 56px auto;gap:8px;align-items:end}
+.add-team input[type=color]{width:56px;height:46px;border:1.5px solid var(--line);border-radius:10px;padding:3px;background:#fff;cursor:pointer}
+.backup-meta{font-size:13px;color:var(--muted);margin:10px 0 0}
+.backup-meta.warn{color:#8A5A00}
+.danger-zone{border-color:#EBC1BA}
+.about p{font-size:14px;color:var(--muted);margin:0 0 8px}
+.about p:last-child{margin:0}
+
+/* ---------- Modal & toast ---------- */
+dialog.modal{border:0;border-radius:16px;padding:0;width:min(420px,calc(100vw - 32px));color:var(--ink);box-shadow:0 30px 60px -20px rgba(0,0,0,.45)}
+dialog.modal::backdrop{background:rgba(12,22,17,.55)}
+.modal-body{padding:20px 20px 4px}
+.modal-body h3{margin:0 0 8px;font-size:18px}
+.modal-body p{margin:0;color:var(--muted);font-size:14px;white-space:pre-line}
+.modal-actions{display:flex;gap:8px;justify-content:flex-end;padding:16px 20px 18px;flex-wrap:wrap}
+.modal-actions .btn{min-height:42px;font-size:14px}
+.toast{position:fixed;left:50%;bottom:calc(24px + env(safe-area-inset-bottom));transform:translate(-50%,16px);background:var(--ink);color:#fff;padding:10px 16px;border-radius:12px;font-size:14px;opacity:0;pointer-events:none;transition:opacity .2s,transform .2s;z-index:2000;max-width:calc(100vw - 32px);box-shadow:0 10px 30px -10px rgba(0,0,0,.5)}
+.toast.show{opacity:1;transform:translate(-50%,0)}
+@media (max-width:760px){.toast{bottom:calc(var(--nav-h) + 14px + env(safe-area-inset-bottom))}}
+
+@media (prefers-reduced-motion:reduce){
+  *,*::before,*::after{animation-duration:.01ms!important;animation-iteration-count:1!important;transition-duration:.01ms!important}
+  .stamp.is-new{animation:none}
+}
+</style>
+</head>
+<body>
+
+<!-- 印章油墨質感濾鏡（全站共用） -->
+<svg width="0" height="0" style="position:absolute" aria-hidden="true" focusable="false">
+  <defs>
+    <filter id="ink" x="-15%" y="-15%" width="130%" height="130%">
+      <feTurbulence type="fractalNoise" baseFrequency="0.9" numOctaves="2" seed="4" result="grain"/>
+      <feDisplacementMap in="SourceGraphic" in2="grain" scale="2.4" xChannelSelector="R" yChannelSelector="G" result="rough"/>
+      <feTurbulence type="fractalNoise" baseFrequency="0.32" numOctaves="2" seed="11" result="spots"/>
+      <feColorMatrix in="spots" type="matrix" values="0 0 0 0 0  0 0 0 0 0  0 0 0 0 0  -3.2 0 0 0 2.75" result="mask"/>
+      <feComposite in="rough" in2="mask" operator="in"/>
+    </filter>
+  </defs>
+</svg>
+
+<header class="topbar">
+  <div class="wrap topbar-inner">
+    <div class="brand">
+      <svg viewBox="0 0 32 32" aria-hidden="true"><circle cx="16" cy="16" r="14" fill="#F2F5F0"/><path d="M8.2 6.6c3.4 2.6 4.9 5.9 4.9 9.4s-1.5 6.8-4.9 9.4M23.8 6.6c-3.4 2.6-4.9 5.9-4.9 9.4s1.5 6.8 4.9 9.4" fill="none" stroke="#C22F2B" stroke-width="1.6" stroke-dasharray="2.2 1.6"/></svg>
+      <h1>Baseball Note</h1>
+    </div>
+    <nav class="tabs" role="tablist" aria-label="主要功能">
+      <button class="tab" role="tab" data-tab="overview" aria-selected="true">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="4" width="18" height="16" rx="2"/><path d="M3 10h18M9 10v10M15 10v10"/></svg>總覽
+      </button>
+      <button class="tab" role="tab" data-tab="checkin" aria-selected="false">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 21s-7-6.2-7-11.5a7 7 0 0 1 14 0C19 14.8 12 21 12 21z"/><circle cx="12" cy="9.5" r="2.5"/></svg>打卡
+      </button>
+      <button class="tab" role="tab" data-tab="tickets" aria-selected="false">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 8a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2v2.5a1.5 1.5 0 0 0 0 3V16a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-2.5a1.5 1.5 0 0 0 0-3z"/><path d="M15 7v10" stroke-dasharray="1.5 2.5"/></svg>票夾
+      </button>
+      <button class="tab" role="tab" data-tab="settings" aria-selected="false">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M4 6h9M19 6h1M4 12h3M13 12h7M4 18h11M21 18h-1"/><circle cx="16" cy="6" r="2.5"/><circle cx="10" cy="12" r="2.5"/><circle cx="17.5" cy="18" r="2.5"/></svg>設定
+      </button>
+    </nav>
+  </div>
+</header>
+
+<main class="wrap">
+
+  <!-- ================= 總覽 ================= -->
+  <section id="tab-overview" class="tab-panel" role="tabpanel" aria-label="總覽">
+    <div class="board" aria-label="我的進場戰績">
+      <div class="board-head">
+        <span>我的進場戰績</span>
+        <button class="team-chip" id="boardTeam" data-action="tab" data-tab="settings" title="更換預設支持球隊"></button>
+      </div>
+      <div class="board-grid">
+        <div class="cell">
+          <span class="cell-label">總進場</span>
+          <span class="cell-num" id="statGames">0</span>
+          <span class="cell-sub" id="statGamesSub">今年 0 場</span>
+        </div>
+        <div class="cell">
+          <span class="cell-label">進場勝率</span>
+          <span class="cell-num" id="statPct">.---</span>
+          <span class="cell-sub" id="statRecord">0 勝 0 敗 0 和</span>
+        </div>
+        <div class="cell">
+          <span class="cell-label">已解鎖球場</span>
+          <span class="cell-num"><span id="statParks">0</span><small>/12</small></span>
+          <div class="bulbs" id="parkBulbs" aria-hidden="true"></div>
+        </div>
+      </div>
+      <div class="board-foot">
+        <span>近 10 場</span>
+        <div class="recent" id="recentRow"></div>
+        <span class="streak" id="streak"></span>
+      </div>
+    </div>
+
+    <div class="overview-grid">
+      <section class="panel map-panel">
+        <div class="panel-head">
+          <h2>踩點地圖</h2>
+          <div class="legend"><span><i class="on"></i>去過</span><span><i class="off"></i>還沒去</span></div>
+        </div>
+        <div id="map" class="map" aria-label="台灣職棒球場地圖"></div>
+      </section>
+      <section class="panel">
+        <h2>球場踩點</h2>
+        <div id="parkList"></div>
+      </section>
+    </div>
+
+    <section class="panel">
+      <div class="panel-head">
+        <h2>成就</h2>
+        <p class="hint" id="badgeCount"></p>
+      </div>
+      <div class="badges" id="badges"></div>
+    </section>
+  </section>
+
+  <!-- ================= 打卡 ================= -->
+  <section id="tab-checkin" class="tab-panel" role="tabpanel" aria-label="打卡" hidden>
+    <div class="checkin-grid">
+      <section class="panel gps-panel">
+        <h2>人在球場嗎？</h2>
+        <p>按下定位。如果你在任一座球場 1 公里內，會自動帶入球場和今天日期；不在附近也會告訴你最近的球場有多遠。</p>
+        <button type="button" class="btn btn-amber btn-lg" id="gpsBtn">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round"><circle cx="12" cy="12" r="7"/><circle cx="12" cy="12" r="2.5" fill="currentColor"/><path d="M12 2v3M12 19v3M2 12h3M19 12h3"/></svg>
+          定位並打卡
+        </button>
+        <div id="gpsStatus" class="gps-status" aria-live="polite" hidden></div>
+      </section>
+
+      <form id="recordForm" class="panel" novalidate>
+        <div class="form-title">
+          <h2 id="formTitle">新增觀賽紀錄</h2>
+          <a class="inline-link" href="https://www.cpbl.com.tw/schedule" target="_blank" rel="noopener noreferrer">CPBL 官網賽程</a>
+        </div>
+        <div id="formError" class="form-error" role="alert" hidden></div>
+
+        <div class="row-2 stack-xs">
+          <div class="field">
+            <label class="field-label" for="fDate">日期</label>
+            <input class="input" type="date" id="fDate" required>
+          </div>
+          <div class="field">
+            <label class="field-label" for="fPark">球場</label>
+            <select class="select" id="fPark" required></select>
+          </div>
+        </div>
+
+        <div id="matchBox" class="match-box" aria-live="polite" hidden></div>
+
+        <div class="row-2">
+          <div class="field">
+            <label class="field-label" for="fMyTeam">我支持的球隊</label>
+            <select class="select" id="fMyTeam"></select>
+          </div>
+          <div class="field">
+            <label class="field-label" for="fOpp">對手球隊</label>
+            <select class="select" id="fOpp"></select>
+          </div>
+        </div>
+
+        <div class="role-line">
+          <span class="field-label" id="roleLabel">我支持的球隊這場是</span>
+          <div class="seg" role="radiogroup" aria-labelledby="roleLabel">
+            <input type="radio" name="role" id="roleAway" value="away" checked><label for="roleAway">客隊</label>
+            <input type="radio" name="role" id="roleHome" value="home"><label for="roleHome">主隊</label>
+          </div>
+        </div>
+
+        <div class="field" style="margin-bottom:0">
+          <span class="field-label">最終比分 <em>（客隊 vs 主隊，還沒打完可以先留空）</em></span>
+          <div class="scorebox">
+            <div class="score-side" id="awaySide">
+              <label for="awayScore"><span class="side-tag">客</span><span id="awayName">客隊</span></label>
+              <input class="score-input" id="awayScore" type="number" inputmode="numeric" min="0" max="99" placeholder="-">
+            </div>
+            <span class="score-colon" aria-hidden="true">:</span>
+            <div class="score-side" id="homeSide">
+              <label for="homeScore"><span class="side-tag">主</span><span id="homeName">主隊</span></label>
+              <input class="score-input" id="homeScore" type="number" inputmode="numeric" min="0" max="99" placeholder="-">
+            </div>
+          </div>
+        </div>
+        <div class="result-preview" id="resultPreview" aria-live="polite"></div>
+
+        <fieldset class="players">
+          <legend class="field-label">對戰選手 <em>（找到比賽時自動帶入，也可以自己填）</em></legend>
+          <div class="players-grid">
+            <label class="mini"><span id="lblAwaySP">客隊先發</span><input class="input" id="pAwaySP" maxlength="20" autocomplete="off"></label>
+            <label class="mini"><span id="lblHomeSP">主隊先發</span><input class="input" id="pHomeSP" maxlength="20" autocomplete="off"></label>
+            <label class="mini"><span>勝投</span><input class="input" id="pWP" maxlength="20" autocomplete="off"></label>
+            <label class="mini"><span>敗投</span><input class="input" id="pLP" maxlength="20" autocomplete="off"></label>
+            <label class="mini"><span>救援成功</span><input class="input" id="pSV" maxlength="20" autocomplete="off"></label>
+            <label class="mini"><span>MVP</span><input class="input" id="pMVP" maxlength="20" autocomplete="off"></label>
+          </div>
+        </fieldset>
+
+        <div class="field">
+          <label class="field-label" for="fSeat">座位區域</label>
+          <input class="input" id="fSeat" list="seatList" maxlength="40" placeholder="例如：內野 B 區 12 排">
+          <datalist id="seatList">
+            <option value="內野一壘側"></option>
+            <option value="內野三壘側"></option>
+            <option value="本壘後方"></option>
+            <option value="外野左外野"></option>
+            <option value="外野右外野"></option>
+            <option value="主隊應援區"></option>
+            <option value="客隊應援區"></option>
+            <option value="包廂"></option>
+          </datalist>
+        </div>
+
+        <div class="field">
+          <label class="field-label" for="fLink">CPBL 官網比賽連結</label>
+          <input class="input" id="fLink" type="url" inputmode="url" maxlength="500" placeholder="https://www.cpbl.com.tw/box/index?...">
+        </div>
+
+        <div class="field">
+          <label class="field-label" for="fNotes">觀賽心得</label>
+          <textarea class="textarea" id="fNotes" maxlength="2000" placeholder="今天的 MVP、印象最深的一球、吃了什麼..."></textarea>
+        </div>
+
+        <div class="form-actions">
+          <button type="submit" class="btn btn-primary" id="saveBtn">存入票夾</button>
+          <button type="button" class="btn btn-ghost" id="cancelEdit" hidden>取消編輯</button>
+        </div>
+      </form>
+    </div>
+  </section>
+
+  <!-- ================= 票夾 ================= -->
+  <section id="tab-tickets" class="tab-panel" role="tabpanel" aria-label="票夾" hidden>
+    <div class="toolbar" id="ticketToolbar">
+      <label class="sr-only" for="fltYear">年份</label>
+      <select class="select" id="fltYear"></select>
+      <label class="sr-only" for="fltPark">球場</label>
+      <select class="select" id="fltPark"></select>
+      <div class="seg" role="radiogroup" aria-label="勝敗篩選">
+        <input type="radio" name="flt" id="fltAll" value="all" checked><label for="fltAll">全部</label>
+        <input type="radio" name="flt" id="fltW" value="W"><label for="fltW">勝</label>
+        <input type="radio" name="flt" id="fltL" value="L"><label for="fltL">敗</label>
+        <input type="radio" name="flt" id="fltT" value="T"><label for="fltT">和</label>
+      </div>
+      <span class="count" id="ticketCount"></span>
+    </div>
+    <div class="ticket-list" id="ticketList"></div>
+  </section>
+
+  <!-- ================= 設定 ================= -->
+  <section id="tab-settings" class="tab-panel" role="tabpanel" aria-label="設定" hidden>
+    <div class="settings">
+      <section class="panel">
+        <h2>預設支持球隊</h2>
+        <div class="field" style="margin-bottom:6px">
+          <label class="field-label" for="setDefaultTeam">新增紀錄時自動帶入這一隊</label>
+          <select class="select" id="setDefaultTeam"></select>
+        </div>
+        <p class="hint">每筆紀錄仍可個別選擇支持的球隊，勝率會依照當場支持的球隊計算。</p>
+      </section>
+
+      <section class="panel">
+        <h2>自訂球隊</h2>
+        <p class="hint" style="margin-bottom:12px">內建中職六隊。想記錄國家隊、二軍或交流賽，可以在這裡加上球隊名稱和代表色。</p>
+        <ul class="team-list" id="customTeamList"></ul>
+        <form class="add-team" id="addTeamForm">
+          <div class="field" style="margin:0">
+            <label class="field-label" for="newTeamName">球隊名稱</label>
+            <input class="input" id="newTeamName" maxlength="12" placeholder="例如：中華隊">
+          </div>
+          <div class="field" style="margin:0">
+            <label class="field-label" for="newTeamColor">顏色</label>
+            <input type="color" id="newTeamColor" value="#1F4FA3">
+          </div>
+          <button class="btn btn-primary" type="submit">加入</button>
+        </form>
+      </section>
+
+      <section class="panel">
+        <h2>資料備份</h2>
+        <p class="hint" style="margin-bottom:12px">紀錄只存在這個瀏覽器裡。清除瀏覽器資料或換手機之前，記得先匯出備份檔。</p>
+        <div class="btn-row">
+          <button type="button" class="btn btn-primary" data-action="export">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 4v11M7 10l5 5 5-5M5 20h14"/></svg>匯出 JSON 備份檔
+          </button>
+          <button type="button" class="btn btn-ghost" data-action="import">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 20V9M7 13l5-5 5 5M5 4h14"/></svg>匯入還原
+          </button>
+          <input type="file" id="importFile" accept=".json,application/json" hidden>
+        </div>
+        <p class="backup-meta" id="backupMeta"></p>
+      </section>
+
+      <section class="panel danger-zone">
+        <h2>清除所有資料</h2>
+        <p class="hint" style="margin-bottom:12px">刪除這個瀏覽器裡的全部紀錄與設定，無法復原。</p>
+        <button type="button" class="btn btn-danger" data-action="clear-all">清除所有資料</button>
+      </section>
+
+      <section class="panel">
+        <h2>比賽資料</h2>
+        <p class="hint" id="gamesMeta">讀取中</p>
+      </section>
+
+      <section class="panel about">
+        <h2>使用說明</h2>
+        <p>GPS 定位需要在 HTTPS 網址或本機（localhost）開啟才能使用。手機測試建議把這個檔案放到 GitHub Pages、Netlify 等免費空間。</p>
+        <p>打卡範圍是球場 1 公里內，以手機回報的位置計算直線距離。室內或訊號差時定位誤差會變大，可以手動選擇球場。</p>
+        <p>比賽資料來自中職官網與野球革命 Rebas，放在 GitHub Pages 時每天自動更新。選好日期和球場，就會帶入對戰球隊、比分、先發投手、勝敗投與 MVP。</p>
+        <p>地圖資料來自 OpenStreetMap。</p>
+      </section>
+    </div>
+  </section>
+</main>
+
+<dialog class="modal" id="modal">
+  <div class="modal-body">
+    <h3 id="modalTitle"></h3>
+    <p id="modalText"></p>
+  </div>
+  <div class="modal-actions" id="modalActions"></div>
+</dialog>
+
+<div class="toast" id="toast" role="status" aria-live="polite"></div>
+
+<script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js" crossorigin=""></script>
+<script>
+(() => {
+'use strict';
+
+/* =========================================================
+   1. 基本資料：球場與球隊
+   ========================================================= */
+const STADIUMS = [
+  { id:'taipei-dome',      name:'台北大巨蛋',       short:'大巨蛋', stamp:'台北大巨蛋', city:'台北市信義區', region:'north',   lat:25.042306, lng:121.560083 },
+  { id:'tianmu',           name:'天母棒球場',       short:'天母',   stamp:'天母球場',   city:'台北市士林區', region:'north',   lat:25.113060, lng:121.533060 },
+  { id:'xinzhuang',        name:'新莊棒球場',       short:'新莊',   stamp:'新莊球場',   city:'新北市新莊區', region:'north',   lat:25.041158, lng:121.447718 },
+  { id:'taoyuan',          name:'樂天桃園棒球場',   short:'桃園',   stamp:'桃園球場',   city:'桃園市中壢區', region:'north',   lat:25.000830, lng:121.200560 },
+  { id:'intercontinental', name:'台中洲際棒球場',   short:'洲際',   stamp:'洲際球場',   city:'台中市北屯區', region:'central', lat:24.199720, lng:120.685000 },
+  { id:'douliu',           name:'斗六棒球場',       short:'斗六',   stamp:'斗六球場',   city:'雲林縣斗六市', region:'central', lat:23.717783, lng:120.536027 },
+  { id:'chiayi',           name:'嘉義市立棒球場',   short:'嘉義市', stamp:'嘉義市球場', city:'嘉義市東區',   region:'south',   lat:23.481076, lng:120.465721 },
+  { id:'tainan',           name:'台南市立棒球場',   short:'台南',   stamp:'台南球場',   city:'台南市南區',   region:'south',   lat:22.980586, lng:120.205764 },
+  { id:'asia-pacific',     name:'台南亞太主球場',   short:'亞太',   stamp:'亞太球場',   city:'台南市安南區', region:'south',   lat:23.062710, lng:120.236680 },
+  { id:'chengcing',        name:'澄清湖棒球場',     short:'澄清湖', stamp:'澄清湖球場', city:'高雄市鳥松區', region:'south',   lat:22.654472, lng:120.358972 },
+  { id:'taitung',          name:'台東棒球村',       short:'台東',   stamp:'台東球場',   city:'台東縣台東市', region:'east',    lat:22.787333, lng:121.128583 },
+  { id:'hualien',          name:'花蓮德興棒球場',   short:'花蓮',   stamp:'花蓮球場',   city:'花蓮縣花蓮市', region:'east',    lat:24.005777, lng:121.585436 }
+];
+const REGIONS = { north:'北部', central:'中部', south:'南部', east:'東部' };
+const CHECKIN_RADIUS_KM = 1;
+
+const BUILTIN_TEAMS = [
+  { id:'brothers',  name:'中信兄弟',       short:'中信兄弟', color:'#F4B41A' },
+  { id:'lions',     name:'統一7-ELEVEn獅', short:'統一獅',   color:'#F06C22' },
+  { id:'monkeys',   name:'樂天桃猿',       short:'樂天桃猿', color:'#8B1E3F' },
+  { id:'guardians', name:'富邦悍將',       short:'富邦悍將', color:'#0B4EA2' },
+  { id:'dragons',   name:'味全龍',         short:'味全龍',   color:'#D7182A' },
+  { id:'hawks',     name:'台鋼雄鷹',       short:'台鋼雄鷹', color:'#0F5A44' }
+];
+
+const RESULT_LABEL = { W:'勝', L:'敗', T:'和' };
+const LS_RECORDS  = 'cpbl-ticket-log:records:v1';
+const LS_SETTINGS = 'cpbl-ticket-log:settings:v1';
+const DEFAULT_SETTINGS = { defaultTeam:'brothers', customTeams:[], lastBackup:null };
+
+
+/* =========================================================
+   2. 狀態與儲存
+   ========================================================= */
+const state = { records: [], settings: { ...DEFAULT_SETTINGS } };
+const ui = { editingId:null, justSavedId:null, filter:{ year:'all', park:'all', result:'all' },
+             formGameId:null, needSide:false, lookupKey:'', autoLink:'' };
+
+const $ = (sel, root=document) => root.querySelector(sel);
+const $$ = (sel, root=document) => Array.from(root.querySelectorAll(sel));
+const esc = s => String(s ?? '').replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+const uid = () => 'r' + Date.now().toString(36) + Math.random().toString(36).slice(2, 7);
+const pad = n => String(n).padStart(2, '0');
+const prefersReducedMotion = () => window.matchMedia && window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+
+function todayStr(){
+  const d = new Date();
+  return `${d.getFullYear()}-${pad(d.getMonth()+1)}-${pad(d.getDate())}`;
+}
+function weekday(dateStr){
+  const [y,m,d] = dateStr.split('-').map(Number);
+  return '日一二三四五六'[new Date(y, m-1, d).getDay()];
+}
+function fmtDate(dateStr){ return dateStr.replace(/-/g, '.'); }
+
+function stadiumById(id){ return STADIUMS.find(s => s.id === id) || null; }
+function allTeams(){ return [...BUILTIN_TEAMS, ...state.settings.customTeams]; }
+function teamById(id, fallbackName){
+  const t = allTeams().find(t => t.id === id);
+  if (t) return t;
+  const name = fallbackName || '未知球隊';
+  return { id, name, short:name, color:'#8A948E' };
+}
+function toScore(v){
+  if (v === null || v === undefined || v === '') return null;
+  const n = Math.floor(Number(v));
+  if (!Number.isFinite(n) || n < 0) return null;
+  return Math.min(n, 99);
+}
+function cleanStr(v, max){ return typeof v === 'string' ? v.slice(0, max) : ''; }
+function isHttpUrl(s){ return /^https?:\/\/\S+$/i.test(s); }
+
+const PLAYER_KEYS = ['awaySP', 'homeSP', 'wp', 'lp', 'sv', 'mvp'];
+function cleanPlayers(p){
+  const o = {};
+  PLAYER_KEYS.forEach(k => { o[k] = cleanStr(p && p[k], 20).trim(); });
+  return o;
+}
+function sanitizeRecord(x){
+  if (!x || typeof x !== 'object') return null;
+  if (!stadiumById(x.stadiumId)) return null;
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(x.date || '')) return null;
+  const myTeam = String(x.myTeam || ''), opponent = String(x.opponent || '');
+  if (!myTeam || !opponent) return null;
+  const link = cleanStr(x.link, 500).trim();
+  return {
+    id: String(x.id || uid()),
+    date: x.date,
+    stadiumId: x.stadiumId,
+    myTeam, opponent,
+    myTeamName: cleanStr(x.myTeamName, 30),
+    opponentName: cleanStr(x.opponentName, 30),
+    myRole: x.myRole === 'home' ? 'home' : 'away',
+    awayScore: toScore(x.awayScore),
+    homeScore: toScore(x.homeScore),
+    seat: cleanStr(x.seat, 40),
+    link: isHttpUrl(link) ? link : '',
+    notes: cleanStr(x.notes, 2000),
+    gameId: cleanStr(x.gameId, 40) || null,
+    players: cleanPlayers(x.players),
+    createdAt: Number(x.createdAt) || Date.now(),
+    updatedAt: Number(x.updatedAt) || Date.now()
+  };
+}
+function validTeam(t){
+  return t && typeof t.id === 'string' && /^c_/.test(t.id) && typeof t.name === 'string' && t.name.trim() && /^#[0-9a-f]{6}$/i.test(t.color || '');
+}
+function normalizeTeam(t){
+  const name = t.name.trim().slice(0, 12);
+  return { id:t.id, name, short: name.length > 6 ? name.slice(0, 6) : name, color:t.color };
+}
+
+function loadState(){
+  try {
+    const raw = JSON.parse(localStorage.getItem(LS_SETTINGS) || '{}');
+    state.settings = { ...DEFAULT_SETTINGS, ...(raw && typeof raw === 'object' ? raw : {}) };
+    state.settings.customTeams = Array.isArray(raw.customTeams) ? raw.customTeams.filter(validTeam).map(normalizeTeam) : [];
+  } catch (e) { state.settings = { ...DEFAULT_SETTINGS }; }
+  if (!allTeams().some(t => t.id === state.settings.defaultTeam)) state.settings.defaultTeam = 'brothers';
+  try {
+    const raw = JSON.parse(localStorage.getItem(LS_RECORDS) || '[]');
+    const real = Array.isArray(raw) ? raw.filter(x => !(x && x.demo)) : [];
+    state.records = real.map(sanitizeRecord).filter(Boolean);
+    if (Array.isArray(raw) && real.length !== raw.length) localStorage.setItem(LS_RECORDS, JSON.stringify(state.records));
+  } catch (e) { state.records = []; }
+}
+function persist(){
+  try {
+    localStorage.setItem(LS_RECORDS, JSON.stringify(state.records));
+    localStorage.setItem(LS_SETTINGS, JSON.stringify(state.settings));
+    return true;
+  } catch (e) {
+    toast('瀏覽器拒絕寫入資料，請先匯出備份檔');
+    return false;
+  }
+}
+
+/* =========================================================
+   3. 計算：勝敗、統計、距離
+   ========================================================= */
+function resultOf(r){
+  if (r.awayScore === null || r.homeScore === null) return null;
+  const mine   = r.myRole === 'home' ? r.homeScore : r.awayScore;
+  const theirs = r.myRole === 'home' ? r.awayScore : r.homeScore;
+  return mine > theirs ? 'W' : mine < theirs ? 'L' : 'T';
+}
+const chrono = (a, b) => a.date.localeCompare(b.date) || (a.createdAt - b.createdAt);
+
+function computeStats(){
+  const sorted = [...state.records].sort(chrono);
+  const year = String(new Date().getFullYear());
+  const s = { total:sorted.length, W:0, L:0, T:0, pending:0, thisYear:0, away:0,
+              parks:new Map(), regions:new Set(), maxWinStreak:0, streak:{ type:null, n:0 }, recent:[] };
+  let curType = null, curN = 0;
+  for (const r of sorted){
+    const res = resultOf(r);
+    if (r.date.startsWith(year)) s.thisYear++;
+    if (r.myRole === 'away') s.away++;
+    if (res) s[res]++; else s.pending++;
+    const p = s.parks.get(r.stadiumId) || { n:0, W:0, L:0, T:0 };
+    p.n++; if (res) p[res]++;
+    s.parks.set(r.stadiumId, p);
+    const st = stadiumById(r.stadiumId);
+    if (st) s.regions.add(st.region);
+    if (res === 'W' || res === 'L'){
+      if (res === curType) curN++; else { curType = res; curN = 1; }
+      if (res === 'W') s.maxWinStreak = Math.max(s.maxWinStreak, curN);
+    }
+  }
+  s.streak = { type:curType, n:curN };
+  s.pct = (s.W + s.L) > 0 ? s.W / (s.W + s.L) : null;
+  s.recent = sorted.slice(-10).map(resultOf);
+  return s;
+}
+function fmtPct(p){
+  if (p === null || p === undefined) return '.---';
+  const v = Math.round(p * 1000);
+  return v >= 1000 ? '1.000' : '.' + String(v).padStart(3, '0');
+}
+function haversineKm(lat1, lon1, lat2, lon2){
+  const R = 6371.0088, rad = d => d * Math.PI / 180;
+  const dLat = rad(lat2 - lat1), dLon = rad(lon2 - lon1);
+  const a = Math.sin(dLat/2) ** 2 + Math.cos(rad(lat1)) * Math.cos(rad(lat2)) * Math.sin(dLon/2) ** 2;
+  return 2 * R * Math.asin(Math.min(1, Math.sqrt(a)));
+}
+function fmtDistance(km){
+  if (km < 1) return `${Math.round(km * 1000)} 公尺`;
+  if (km < 10) return `${km.toFixed(1)} 公里`;
+  return `${Math.round(km)} 公里`;
+}
+function hashNum(str){
+  let h = 0;
+  for (let i = 0; i < str.length; i++) h = (h * 31 + str.charCodeAt(i)) | 0;
+  return Math.abs(h);
+}
+
+/* =========================================================
+   4. 共用 UI：圖示、印章、對話框、提示
+   ========================================================= */
+const ICON = {
+  edit:'<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M4 20h4L19 9l-4-4L4 16z"/><path d="M13.5 6.5l4 4"/></svg>',
+  trash:'<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M4 7h16M9 7V4h6v3M6 7l1 13h10l1-13"/></svg>',
+  ext:'<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M14 4h6v6M20 4l-9 9M18 14v5a1 1 0 0 1-1 1H5a1 1 0 0 1-1-1V7a1 1 0 0 1 1-1h5"/></svg>'
+};
+
+function stampSVG(result, topText, bottomText, key){
+  const label = RESULT_LABEL[result] || '未定';
+  const id = 'st' + String(key).replace(/[^a-z0-9]/gi, '');
+  const center = label.length === 1
+    ? `<text x="50" y="62.5" text-anchor="middle" font-size="35">${label}</text>`
+    : `<text x="50" y="58" text-anchor="middle" font-size="19">${label}</text>`;
+  return `<svg viewBox="0 0 100 100" aria-hidden="true">
+    <defs>
+      <path id="${id}t" d="M 19 50 A 31 31 0 0 1 81 50"/>
+      <path id="${id}b" d="M 13 50 A 37 37 0 0 0 87 50"/>
+    </defs>
+    <g filter="url(#ink)">
+      <circle cx="50" cy="50" r="46" fill="none" stroke="currentColor" stroke-width="3.4"/>
+      <circle cx="50" cy="50" r="40.5" fill="none" stroke="currentColor" stroke-width="1.2"/>
+      <text font-size="8.6" letter-spacing="1.2"><textPath href="#${id}t" startOffset="50%" text-anchor="middle">${esc(topText)}</textPath></text>
+      <text class="arc-num" font-size="8.8" letter-spacing="0.6"><textPath href="#${id}b" startOffset="50%" text-anchor="middle">${esc(bottomText)}</textPath></text>
+      <text x="17.5" y="53" text-anchor="middle" font-size="7">★</text>
+      <text x="82.5" y="53" text-anchor="middle" font-size="7">★</text>
+      ${center}
+    </g>
+  </svg>`;
+}
+
+function toast(msg){
+  const el = $('#toast');
+  el.textContent = msg;
+  el.classList.add('show');
+  clearTimeout(toast._t);
+  toast._t = setTimeout(() => el.classList.remove('show'), 2800);
+}
+
+/* 回傳使用者按下的按鈕 value；按 Esc 或點背景回傳 null */
+function ask({ title, text, actions }){
+  const dlg = $('#modal');
+  if (typeof dlg.showModal !== 'function'){
+    const primary = actions.find(a => a.primary) || actions[actions.length - 1];
+    return Promise.resolve(window.confirm(title + '\n\n' + text) ? primary.value : null);
+  }
+  $('#modalTitle').textContent = title;
+  $('#modalText').textContent = text;
+  const box = $('#modalActions');
+  box.innerHTML = '';
+  return new Promise(resolve => {
+    let done = false;
+    const finish = v => { if (done) return; done = true; if (dlg.open) dlg.close(); resolve(v); };
+    actions.forEach(a => {
+      const b = document.createElement('button');
+      b.type = 'button';
+      b.className = 'btn ' + (a.kind === 'danger' ? 'btn-danger' : a.primary ? 'btn-primary' : 'btn-ghost');
+      b.textContent = a.label;
+      b.addEventListener('click', () => finish(a.value));
+      box.appendChild(b);
+    });
+    dlg.addEventListener('close', () => finish(null), { once:true });
+    dlg.onclick = e => { if (e.target === dlg) finish(null); };
+    dlg.showModal();
+  });
+}
+
+/* =========================================================
+   5. 分頁切換
+   ========================================================= */
+const TABS = ['overview', 'checkin', 'tickets', 'settings'];
+function showTab(name, { scroll = true } = {}){
+  if (!TABS.includes(name)) name = 'overview';
+  $$('.tab').forEach(b => b.setAttribute('aria-selected', String(b.dataset.tab === name)));
+  TABS.forEach(t => { $('#tab-' + t).hidden = (t !== name); });
+  if (name === 'overview' && map) setTimeout(() => {
+    map.invalidateSize();
+    if (!mapFitted && $('#map').offsetWidth > 0){ map.fitBounds(TW_BOUNDS); mapFitted = true; }
+  }, 60);
+  if (scroll) window.scrollTo({ top:0 });
+  try { history.replaceState(null, '', '#' + name); } catch (e) {}
+}
+
+/* =========================================================
+   6. 總覽：記分板、地圖、球場清單、成就
+   ========================================================= */
+const BADGES = [
+  { icon:'1',    title:'開幕戰',     desc:'第一次進場看球',                 test:s => s.total >= 1 },
+  { icon:'10',   title:'十場球迷',   desc:'累積進場 10 場',                 test:s => s.total >= 10 },
+  { icon:'30',   title:'季票等級',   desc:'累積進場 30 場',                 test:s => s.total >= 30 },
+  { icon:'.600', title:'勝利女神',   desc:'分出勝負 5 場以上，勝率 .600 以上', test:s => (s.W + s.L) >= 5 && s.pct >= 0.6 },
+  { icon:'3連',  title:'三連勝',     desc:'進場連續看到 3 場勝利',          test:s => s.maxWinStreak >= 3 },
+  { icon:'客',   title:'客場遠征',   desc:'以客隊身分進場 5 場',            test:s => s.away >= 5 },
+  { icon:'蛋',   title:'巨蛋初體驗', desc:'在台北大巨蛋看過球',             test:s => s.parks.has('taipei-dome') },
+  { icon:'4',    title:'北中南東',   desc:'北、中、南、東部球場都去過',     test:s => s.regions.size >= 4 },
+  { icon:'12',   title:'全壘打',     desc:'12 座球場全部解鎖',              test:s => s.parks.size >= STADIUMS.length }
+];
+
+function renderBoard(s){
+  const t = teamById(state.settings.defaultTeam);
+  const chip = $('#boardTeam');
+  chip.style.setProperty('--c', t.color);
+  chip.innerHTML = `<i></i>支持 ${esc(t.name)}`;
+
+  $('#statGames').textContent = s.total;
+  $('#statGamesSub').textContent = `今年 ${s.thisYear} 場` + (s.pending ? `，${s.pending} 場未填比分` : '');
+  const pctText = fmtPct(s.pct);
+  $('#statPct').textContent = pctText;
+  $('#statPct').classList.toggle('long', pctText.length >= 5);
+  $('#statRecord').textContent = `${s.W} 勝 ${s.L} 敗 ${s.T} 和`;
+  $('#statParks').textContent = s.parks.size;
+  $('#parkBulbs').innerHTML = STADIUMS.map(st => `<span class="bulb ${s.parks.has(st.id) ? 'on' : ''}" title="${esc(st.name)}"></span>`).join('');
+
+  const cells = [];
+  for (let i = 0; i < 10 - s.recent.length; i++) cells.push('<span class="E"></span>');
+  s.recent.forEach(r => cells.push(`<span class="${r || 'P'}">${r ? RESULT_LABEL[r] : '未'}</span>`));
+  $('#recentRow').innerHTML = cells.join('');
+
+  const st = s.streak;
+  $('#streak').textContent = st.n >= 2 ? `目前 ${st.n} 連${st.type === 'W' ? '勝' : '敗'}` : '';
+}
+
+function renderParkList(s){
+  const html = Object.entries(REGIONS).map(([key, label]) => {
+    const rows = STADIUMS.filter(st => st.region === key).map(st => {
+      const p = s.parks.get(st.id);
+      return `<li><button type="button" class="park-row ${p ? 'on' : ''}" data-action="focus-park" data-park="${st.id}">
+        <span class="park-dot"></span>
+        <span class="park-name">${esc(st.name)}<small>${esc(st.city)}</small></span>
+        <span class="park-count">${p ? p.n : 0}<small>場</small></span>
+      </button></li>`;
+    }).join('');
+    return `<div class="region-title">${label}</div><ul class="park-list">${rows}</ul>`;
+  }).join('');
+  $('#parkList').innerHTML = html;
+}
+
+function renderBadges(s){
+  let got = 0;
+  $('#badges').innerHTML = BADGES.map(b => {
+    const on = b.test(s);
+    if (on) got++;
+    return `<div class="badge ${on ? 'on' : ''}">
+      <span class="badge-icon ${b.icon.length >= 3 ? 'sm' : ''}">${esc(b.icon)}</span>
+      <div class="badge-text"><b>${esc(b.title)}</b><span>${esc(b.desc)}</span></div>
+    </div>`;
+  }).join('');
+  $('#badgeCount').textContent = `已解鎖 ${got} / ${BADGES.length}`;
+}
+
+/* ---------- Leaflet 地圖 ---------- */
+let map = null, mapFitted = false;
+const markers = {};
+const TW_BOUNDS = [[21.85, 119.95], [25.35, 122.05]];
+
+function pinIcon(count){
+  const on = count > 0;
+  const size = on ? 34 : 26;
+  const tip = Math.round(size / 2 + size * 0.7071);
+  return L.divIcon({
+    className:'pin-wrap',
+    html:`<div class="pin ${on ? 'on' : ''}"><span>${on ? count : ''}</span></div>`,
+    iconSize:[size, size],
+    iconAnchor:[size / 2, tip],
+    popupAnchor:[0, -tip + 4]
+  });
+}
+function popupHTML(st, p){
+  if (!p){
+    return `<div class="pop"><strong>${esc(st.name)}</strong><span class="pop-city">${esc(st.city)}</span>
+      <p class="pop-empty">還沒在這裡看過球。</p>
+      <button type="button" class="btn btn-amber" data-pop="checkin" data-park="${st.id}">在這裡打卡</button></div>`;
+  }
+  const decided = p.W + p.L;
+  return `<div class="pop"><strong>${esc(st.name)}</strong><span class="pop-city">${esc(st.city)}</span>
+    <div class="pop-stats">
+      <div><b>${p.n}</b><span>進場</span></div>
+      <div><b>${fmtPct(decided ? p.W / decided : null)}</b><span>勝率</span></div>
+      <div><b>${p.W}-${p.L}-${p.T}</b><span>勝敗和</span></div>
+    </div>
+    <button type="button" class="btn btn-primary" data-pop="tickets" data-park="${st.id}">看這裡的票根</button></div>`;
+}
+function initMap(){
+  const el = $('#map');
+  if (!window.L){
+    el.innerHTML = '<div class="map-fallback">地圖元件沒有載入成功，請確認網路連線後重新整理。<br>右側的球場踩點清單仍然可以使用。</div>';
+    return;
+  }
+  map = L.map(el, { scrollWheelZoom:false, zoomSnap:0.5 });
+  /* 若一開始停在其他分頁，地圖容器沒有尺寸，等切回總覽再對準台灣 */
+  if (el.offsetWidth > 0){ map.fitBounds(TW_BOUNDS); mapFitted = true; }
+  else map.setView([23.7, 120.95], 7);
+  map.on('focus', () => map.scrollWheelZoom.enable());
+  map.on('blur', () => map.scrollWheelZoom.disable());
+
+  const osm = L.tileLayer('https://tile.openstreetmap.org/{z}/{x}/{y}.png', {
+    maxZoom:19,
+    attribution:'&copy; <a href="https://www.openstreetmap.org/copyright" target="_blank" rel="noopener">OpenStreetMap</a> 貢獻者'
+  }).addTo(map);
+  /* 若 OSM 圖磚被擋（例如以本機檔案開啟），改用同樣是 OSM 資料的 CARTO 圖磚 */
+  let tileErrors = 0, switched = false;
+  osm.on('tileerror', () => {
+    if (switched || ++tileErrors < 4) return;
+    switched = true;
+    map.removeLayer(osm);
+    L.tileLayer('https://{s}.basemaps.cartocdn.com/rastertiles/voyager/{z}/{x}/{y}{r}.png', {
+      maxZoom:19, subdomains:'abcd',
+      attribution:'&copy; <a href="https://www.openstreetmap.org/copyright" target="_blank" rel="noopener">OpenStreetMap</a> 貢獻者 &copy; <a href="https://carto.com/attributions" target="_blank" rel="noopener">CARTO</a>'
+    }).addTo(map);
+  });
+
+  STADIUMS.forEach(st => {
+    markers[st.id] = L.marker([st.lat, st.lng], { icon:pinIcon(0), title:st.name, riseOnHover:true }).addTo(map);
+  });
+
+  /* Leaflet 會攔截彈出視窗內的點擊，所以在這裡直接綁定 */
+  map.on('popupopen', e => {
+    const root = e.popup.getElement();
+    if (!root) return;
+    $$('[data-pop]', root).forEach(btn => btn.addEventListener('click', () => {
+      const park = btn.dataset.park;
+      map.closePopup();
+      if (btn.dataset.pop === 'tickets') openTicketsAt(park);
+      else startCheckinAt(park);
+    }));
+  });
+}
+function renderMap(s){
+  if (!map) return;
+  STADIUMS.forEach(st => {
+    const p = s.parks.get(st.id);
+    const m = markers[st.id];
+    m.setIcon(pinIcon(p ? p.n : 0));
+    m.setZIndexOffset(p ? 1000 : 0);
+    m.bindPopup(popupHTML(st, p), { maxWidth:260 });
+  });
+}
+function focusPark(id){
+  const st = stadiumById(id);
+  if (!map || !st) return;
+  const el = $('#map');
+  const rect = el.getBoundingClientRect();
+  if (rect.top < 60 || rect.bottom > window.innerHeight){
+    el.scrollIntoView({ behavior: prefersReducedMotion() ? 'auto' : 'smooth', block:'center' });
+  }
+  if (prefersReducedMotion()) map.setView([st.lat, st.lng], 13);
+  else map.flyTo([st.lat, st.lng], 13, { duration:0.8 });
+  setTimeout(() => markers[id].openPopup(), prefersReducedMotion() ? 0 : 850);
+}
+
+/* =========================================================
+   7. 比賽資料：選好日期和球場就自動帶入
+   data/games.json 由 GitHub Actions 每天更新（scripts/update-games.mjs）
+   ========================================================= */
+const KIND_LABEL = { A:'例行賽', C:'季後挑戰賽', E:'台灣大賽', B:'明星賽', G:'熱身賽' };
+const GAMES = { status:'loading', byId:new Map(), byKey:new Map(), byDate:new Map(), total:0, checkedAt:'', source:'' };
+
+async function loadGames(){
+  try {
+    const res = await fetch('data/games.json', { cache:'no-cache' });
+    if (!res.ok) throw new Error('HTTP ' + res.status);
+    const data = await res.json();
+    for (const g of (Array.isArray(data.games) ? data.games : [])){
+      if (!g || !g.id || !/^\d{4}-\d{2}-\d{2}$/.test(g.date || '') || !stadiumById(g.park)) continue;
+      GAMES.byId.set(g.id, g);
+      const key = g.date + '|' + g.park;
+      if (!GAMES.byKey.has(key)) GAMES.byKey.set(key, []);
+      GAMES.byKey.get(key).push(g);
+      if (!GAMES.byDate.has(g.date)) GAMES.byDate.set(g.date, []);
+      GAMES.byDate.get(g.date).push(g);
+    }
+    GAMES.total = GAMES.byId.size;
+    GAMES.checkedAt = data.checkedAt || '';
+    GAMES.source = data.source || '';
+    GAMES.status = GAMES.total ? 'ok' : 'none';
+  } catch (e) {
+    GAMES.status = 'none';
+  }
+  const sync = syncRecordsWithGames();
+  if (sync.changed){ persist(); renderAll({ keepForm:true }); }
+  else renderSettings();
+  if (sync.scores) toast(`已依官方賽果補上 ${sync.scores} 場比分`);
+  ui.lookupKey = '';
+  maybeLookup();
+}
+function gamesAt(date, park){
+  return (GAMES.byKey.get(date + '|' + park) || []).filter(g => g.status !== 'postponed')
+    .sort((a, b) => (a.time || '').localeCompare(b.time || ''));
+}
+function boxLink(g){
+  return g.sno ? `https://www.cpbl.com.tw/box/index?year=${g.date.slice(0, 4)}&kindCode=${encodeURIComponent(g.kind || 'A')}&gameSno=${g.sno}` : '';
+}
+function gameTeamsMatch(g, r){
+  const away = r.myRole === 'away' ? r.myTeam : r.opponent;
+  const home = r.myRole === 'home' ? r.myTeam : r.opponent;
+  return g.away === away && g.home === home;
+}
+/* 已存的票根：找得到對應比賽就補上比分（原本「未定」的）、球員與官網連結 */
+function syncRecordsWithGames(){
+  const out = { scores:0, players:0, changed:false };
+  if (GAMES.status !== 'ok') return out;
+  for (const r of state.records){
+    let g = r.gameId ? GAMES.byId.get(r.gameId) : null;
+    if (g && (g.date !== r.date || g.park !== r.stadiumId || !gameTeamsMatch(g, r))) g = null;
+    if (!g){
+      const found = gamesAt(r.date, r.stadiumId).filter(x => gameTeamsMatch(x, r));
+      if (found.length !== 1) continue;
+      g = found[0];
+      if (r.gameId !== g.id){ r.gameId = g.id; out.changed = true; }
+    }
+    if (r.awayScore === null && r.homeScore === null && g.status === 'final' && g.awayScore !== null && g.homeScore !== null){
+      r.awayScore = g.awayScore; r.homeScore = g.homeScore; out.scores++; out.changed = true;
+    }
+    r.players = r.players || cleanPlayers();
+    for (const k of PLAYER_KEYS){
+      if (!r.players[k] && g[k]){ r.players[k] = g[k]; out.players++; out.changed = true; }
+    }
+    if (!r.link && g.sno){ r.link = boxLink(g); out.changed = true; }
+  }
+  return out;
+}
+
+/* ---------- 表單：比賽資訊方塊 ---------- */
+function maybeLookup(){
+  const key = F.date.value + '|' + F.park.value;
+  if (key === ui.lookupKey) return;
+  ui.lookupKey = key;
+  ui.formGameId = null;
+  ui.needSide = false;
+  renderMatchBox(!ui.editingId);
+}
+function teamLabel(id, name){ return teamById(id, name).short; }
+function renderMatchBox(apply){
+  const box = $('#matchBox');
+  const date = F.date.value, park = F.park.value, st = stadiumById(park);
+  if (GAMES.status !== 'ok' || !date || !st){ box.hidden = true; box.innerHTML = ''; return; }
+  box.hidden = false;
+  const list = gamesAt(date, park);
+
+  if (!list.length){
+    ui.formGameId = null;
+    ui.needSide = false;
+    const stopped = (GAMES.byKey.get(date + '|' + park) || []).some(g => g.status === 'postponed');
+    const others = (GAMES.byDate.get(date) || []).filter(g => g.status !== 'postponed' && g.park !== park);
+    let html = stopped ? `${esc(st.name)}這天的比賽延賽了。` : `${esc(st.name)}這天沒有比賽資料，可以直接手動填寫。`;
+    if (others.length){
+      html += `<span class="match-sub">當天其他球場有比賽，是不是選錯球場了？</span><div class="near-list">` +
+        others.map(g => `<button type="button" class="chip" data-action="match-park" data-park="${g.park}">${esc(stadiumById(g.park).short)}<span class="chip-sub">${esc(teamLabel(g.away, g.awayName))} vs ${esc(teamLabel(g.home, g.homeName))}</span></button>`).join('') + '</div>';
+    } else if (GAMES.checkedAt && date > GAMES.checkedAt){
+      html += `<span class="match-sub">比賽資料更新到 ${fmtDate(GAMES.checkedAt)}，之後的賽程會在每天自動更新後出現。</span>`;
+    }
+    box.className = 'match-box empty';
+    box.innerHTML = html;
+    return;
+  }
+
+  let g = list.find(x => x.id === ui.formGameId);
+  if (!g && list.length === 1) g = list[0];
+  if (!g){
+    box.className = 'match-box need';
+    box.innerHTML = `<div class="match-head"><span>這天${esc(st.name)}有 ${list.length} 場比賽，請選你看的那一場</span></div><div class="near-list">` +
+      list.map(x => `<button type="button" class="chip" data-action="match-pick" data-game="${esc(x.id)}">${esc(x.time || '')} ${esc(teamLabel(x.away, x.awayName))} vs ${esc(teamLabel(x.home, x.homeName))}</button>`).join('') + '</div>';
+    return;
+  }
+  if (apply) applyGame(g);
+  drawMatch(g);
+}
+function playersLine(g){
+  const items = [];
+  if (g.wp) items.push(`勝投<b>${esc(g.wp)}</b>`);
+  if (g.lp) items.push(`敗投<b>${esc(g.lp)}</b>`);
+  if (g.sv) items.push(`救援<b>${esc(g.sv)}</b>`);
+  if (g.mvp) items.push(`MVP<b>${esc(g.mvp)}</b>`);
+  if (!items.length && (g.awaySP || g.homeSP)) items.push(`先發<b>${esc(g.awaySP || '未定')}</b> vs<b>${esc(g.homeSP || '未定')}</b>`);
+  return items.length ? `<div class="match-players">${items.map(x => `<span>${x}</span>`).join('')}</div>` : '';
+}
+function drawMatch(g){
+  const box = $('#matchBox');
+  const a = teamById(g.away, g.awayName), h = teamById(g.home, g.homeName);
+  const today = todayStr();
+  const statusText = g.status === 'final' ? '終場' : g.date >= today ? `${g.time ? g.time + ' ' : ''}開打` : '比分還沒更新，之後會自動補上';
+  const applied = ui.formGameId === g.id;
+  const known = id => allTeams().some(t => t.id === id);
+  const sideBtn = id => {
+    const on = applied && !ui.needSide && F.my.value === id;
+    const t = teamById(id);
+    return `<button type="button" class="side-btn ${on ? 'on' : ''}" data-action="pick-side" data-team="${esc(id)}" aria-pressed="${on}"><i style="--c:${esc(t.color)}"></i>${esc(t.short)}</button>`;
+  };
+  let action = '';
+  if (!applied) action = `<button type="button" class="btn btn-ghost btn-sm" data-action="match-apply" data-game="${esc(g.id)}">帶入這場比賽資料</button>`;
+  else if (known(g.away) && known(g.home)) action = `<div class="side-pick"><span>${ui.needSide ? '這場你支持哪一隊？' : '我支持'}</span>${sideBtn(g.away)}${sideBtn(g.home)}</div>`;
+  box.className = 'match-box' + (applied && ui.needSide ? ' need' : '');
+  box.innerHTML = `
+    <div class="match-head"><span>${applied ? '已帶入' : '找到'}${esc(KIND_LABEL[g.kind] || '比賽')}${g.sno ? ` 第 ${g.sno} 場` : ''}</span><span>${esc(statusText)}</span></div>
+    <div class="match-line">
+      <span class="match-team"><i style="--c:${esc(a.color)}"></i>${esc(a.short)}<small>客</small></span>
+      <span class="match-score">${g.status === 'final' ? `${g.awayScore} : ${g.homeScore}` : 'vs'}</span>
+      <span class="match-team home"><small>主</small>${esc(h.short)}<i style="--c:${esc(h.color)}"></i></span>
+    </div>
+    ${playersLine(g)}
+    ${action}`;
+}
+function setSide(g, teamId){
+  const role = teamId === g.home ? 'home' : 'away';
+  fillTeamSelects(teamId, role === 'home' ? g.away : g.home);
+  (role === 'home' ? $('#roleHome') : $('#roleAway')).checked = true;
+}
+function applyGame(g){
+  ui.formGameId = g.id;
+  const known = id => allTeams().some(t => t.id === id);
+  if (known(g.away) && known(g.home)){
+    const def = state.settings.defaultTeam;
+    const mine = [g.away, g.home].includes(def) ? def : null;
+    ui.needSide = !mine;
+    setSide(g, mine || g.away);
+  } else {
+    ui.needSide = false;
+  }
+  F.away.value = g.status === 'final' ? g.awayScore : '';
+  F.home.value = g.status === 'final' ? g.homeScore : '';
+  PLAYER_KEYS.forEach(k => { P[k].value = g[k] || ''; });
+  const link = boxLink(g);
+  if (link && (!F.link.value || F.link.value === ui.autoLink)){ F.link.value = link; ui.autoLink = link; }
+  updateForm();
+}
+function pickSide(teamId){
+  const g = GAMES.byId.get(ui.formGameId);
+  if (!g) return;
+  setSide(g, teamId);
+  ui.needSide = false;
+  showFormError('');
+  updateForm();
+  drawMatch(g);
+}
+function onTeamsChangedByHand(){
+  const g = GAMES.byId.get(ui.formGameId);
+  if (!g) return;
+  if ([g.away, g.home].includes(F.my.value)) ui.needSide = false;
+  drawMatch(g);
+}
+
+/* =========================================================
+   7-2. 打卡：GPS 定位
+   ========================================================= */
+function setGpsStatus(kind, html){
+  const el = $('#gpsStatus');
+  el.className = 'gps-status' + (kind ? ' ' + kind : '');
+  el.innerHTML = html;
+  el.hidden = !html;
+}
+function locate(){
+  const btn = $('#gpsBtn');
+  if (!('geolocation' in navigator)){
+    setGpsStatus('err', '這個瀏覽器不支援定位，請直接在右側手動選擇球場。');
+    return;
+  }
+  if (window.isSecureContext === false){
+    setGpsStatus('err', '定位功能需要在 HTTPS 網址或 localhost 開啟。請把檔案放到 GitHub Pages 等網站後再試，或先手動選擇球場。');
+    return;
+  }
+  btn.disabled = true;
+  setGpsStatus('', '<span class="spinner" aria-hidden="true"></span>定位中。第一次使用時，請在瀏覽器詢問時允許取得位置。');
+
+  navigator.geolocation.getCurrentPosition(pos => {
+    btn.disabled = false;
+    const { latitude, longitude, accuracy } = pos.coords;
+    const ranked = STADIUMS
+      .map(st => ({ st, km: haversineKm(latitude, longitude, st.lat, st.lng) }))
+      .sort((a, b) => a.km - b.km);
+    const nearest = ranked[0];
+    const acc = accuracy ? `<small>定位精準度約 ±${Math.round(accuracy)} 公尺</small>` : '';
+
+    if (nearest.km < CHECKIN_RADIUS_KM){
+      $('#fPark').value = nearest.st.id;
+      $('#fDate').value = todayStr();
+      maybeLookup();
+      updateForm();
+      const found = ui.formGameId ? '，也找到今天的比賽，請確認下方資訊' : '，接著填對戰組合就好';
+      setGpsStatus('ok', `<b>打卡成功</b>，你在 ${esc(nearest.st.name)}（距離約 ${fmtDistance(nearest.km)}）。已帶入球場和今天日期${found}。${acc}`);
+      toast(`已在 ${nearest.st.name} 打卡`);
+    } else {
+      const chips = ranked.slice(0, 3).map(r =>
+        `<button type="button" class="chip" data-action="pick-park" data-park="${r.st.id}">${esc(r.st.short)}<b>${esc(fmtDistance(r.km))}</b></button>`).join('');
+      setGpsStatus('warn', `目前最近的球場是 <b>${esc(nearest.st.name)}</b>，距離約 ${fmtDistance(nearest.km)}，不在 1 公里打卡範圍內。可以點下面的球場帶入，或在表單手動選擇。${acc}<div class="near-list">${chips}</div>`);
+    }
+  }, err => {
+    btn.disabled = false;
+    const msg = {
+      1:'沒有取得位置權限。請到瀏覽器或手機設定允許這個網站使用位置，或直接手動選擇球場。',
+      2:'暫時抓不到位置，可能在室內或訊號不佳。可以到戶外再試一次，或手動選擇球場。',
+      3:'定位逾時。請再按一次，或手動選擇球場。'
+    }[err.code] || '定位失敗，請手動選擇球場。';
+    setGpsStatus('err', msg);
+  }, { enableHighAccuracy:true, timeout:15000, maximumAge:60000 });
+}
+
+/* =========================================================
+   8. 觀賽紀錄表單
+   ========================================================= */
+const F = {
+  form:$('#recordForm'), date:$('#fDate'), park:$('#fPark'), my:$('#fMyTeam'), opp:$('#fOpp'),
+  away:$('#awayScore'), home:$('#homeScore'), seat:$('#fSeat'), link:$('#fLink'), notes:$('#fNotes')
+};
+const P = { awaySP:$('#pAwaySP'), homeSP:$('#pHomeSP'), wp:$('#pWP'), lp:$('#pLP'), sv:$('#pSV'), mvp:$('#pMVP') };
+function formRole(){ return $('#roleHome').checked ? 'home' : 'away'; }
+
+function teamOptions(selectedId, excludeId){
+  const opt = t => `<option value="${esc(t.id)}" ${t.id === selectedId ? 'selected' : ''}>${esc(t.name)}</option>`;
+  const builtins = BUILTIN_TEAMS.filter(t => t.id !== excludeId).map(opt).join('');
+  const customs = state.settings.customTeams.filter(t => t.id !== excludeId).map(opt).join('');
+  return builtins + (customs ? `<optgroup label="自訂球隊">${customs}</optgroup>` : '');
+}
+function fillParkSelect(){
+  F.park.innerHTML = '<option value="">請選擇球場</option>' + Object.entries(REGIONS).map(([key, label]) =>
+    `<optgroup label="${label}">${STADIUMS.filter(s => s.region === key).map(s => `<option value="${s.id}">${esc(s.name)}</option>`).join('')}</optgroup>`
+  ).join('');
+}
+function fillTeamSelects(myId, oppId){
+  if (!allTeams().some(t => t.id === myId)) myId = state.settings.defaultTeam;
+  F.my.innerHTML = teamOptions(myId);
+  F.my.value = myId;
+  syncOpponent(oppId);
+}
+function syncOpponent(preferred){
+  const my = F.my.value;
+  const current = preferred !== undefined ? preferred : F.opp.value;
+  const candidates = allTeams().filter(t => t.id !== my);
+  const pick = candidates.some(t => t.id === current) ? current : (candidates[0] && candidates[0].id);
+  F.opp.innerHTML = teamOptions(pick, my);
+  if (pick) F.opp.value = pick;
+}
+function readForm(){
+  const my = teamById(F.my.value), opp = teamById(F.opp.value);
+  return {
+    date:F.date.value, stadiumId:F.park.value, myTeam:F.my.value, opponent:F.opp.value,
+    myTeamName:my.name, opponentName:opp.name, myRole:formRole(),
+    awayScore:toScore(F.away.value), homeScore:toScore(F.home.value),
+    seat:F.seat.value.trim(), link:F.link.value.trim(), notes:F.notes.value.trim(),
+    players:Object.fromEntries(PLAYER_KEYS.map(k => [k, P[k].value.trim()])),
+    gameId:ui.formGameId || null
+  };
+}
+function updateForm(){
+  const role = formRole();
+  const my = teamById(F.my.value), opp = teamById(F.opp.value);
+  const away = role === 'away' ? my : opp, home = role === 'home' ? my : opp;
+  $('#awayName').textContent = away.name;
+  $('#homeName').textContent = home.name;
+  $('#awaySide').classList.toggle('me', role === 'away');
+  $('#homeSide').classList.toggle('me', role === 'home');
+  $('#lblAwaySP').textContent = `${away.short}先發`;
+  $('#lblHomeSP').textContent = `${home.short}先發`;
+
+  const rec = readForm();
+  const res = resultOf(rec);
+  const st = stadiumById(rec.stadiumId);
+  const stampTop = st ? st.stamp : 'Baseball Note';
+  const stampBottom = rec.date ? fmtDate(rec.date) : '';
+  let text;
+  if (res) text = `依比分，${esc(my.name)}這場是 <b>${RESULT_LABEL[res]}</b>。存檔後會蓋在票根上。`;
+  else if (rec.awayScore === null && rec.homeScore === null) text = '還沒填比分，會先標記為「未定」，之後可以回來補。';
+  else text = '請把兩隊比分都填上，系統才會判定勝敗。';
+  $('#resultPreview').innerHTML = `<div class="stamp ${res || 'P'}" style="--rot:-10deg">${stampSVG(res, stampTop, stampBottom, 'preview')}</div><span>${text}</span>`;
+}
+function showFormError(msg){
+  const el = $('#formError');
+  el.textContent = msg;
+  el.hidden = !msg;
+  if (msg) el.scrollIntoView({ behavior: prefersReducedMotion() ? 'auto' : 'smooth', block:'center' });
+}
+function validate(rec){
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(rec.date)) return '請填寫日期。';
+  if (!stadiumById(rec.stadiumId)) return '請選擇球場，或按「定位並打卡」自動帶入。';
+  if (!rec.myTeam || !rec.opponent) return '請選擇支持的球隊與對手。';
+  if (rec.myTeam === rec.opponent) return '支持的球隊和對手不能是同一隊。';
+  if (ui.needSide) return '請在比賽資訊裡選擇這場你支持哪一隊。';
+  if ((rec.awayScore === null) !== (rec.homeScore === null)) return '比分請兩隊都填，或兩隊都先留空。';
+  if (rec.link && !isHttpUrl(rec.link)) return 'CPBL 連結請貼上以 https:// 開頭的完整網址。';
+  return '';
+}
+function resetForm(){
+  ui.editingId = null;
+  F.form.reset();
+  F.date.value = todayStr();
+  F.park.value = '';
+  $('#roleAway').checked = true;
+  fillTeamSelects(state.settings.defaultTeam);
+  $('#formTitle').textContent = '新增觀賽紀錄';
+  $('#saveBtn').textContent = '存入票夾';
+  $('#cancelEdit').hidden = true;
+  showFormError('');
+  ui.formGameId = null;
+  ui.needSide = false;
+  ui.autoLink = '';
+  ui.lookupKey = '';
+  maybeLookup();
+  updateForm();
+}
+function startEdit(id){
+  const r = state.records.find(x => x.id === id);
+  if (!r) return;
+  ui.editingId = id;
+  F.date.value = r.date;
+  F.park.value = r.stadiumId;
+  fillTeamSelects(r.myTeam, r.opponent);
+  (r.myRole === 'home' ? $('#roleHome') : $('#roleAway')).checked = true;
+  F.away.value = r.awayScore ?? '';
+  F.home.value = r.homeScore ?? '';
+  F.seat.value = r.seat;
+  F.link.value = r.link;
+  F.notes.value = r.notes;
+  PLAYER_KEYS.forEach(k => { P[k].value = (r.players && r.players[k]) || ''; });
+  ui.formGameId = r.gameId || null;
+  ui.needSide = false;
+  ui.autoLink = '';
+  ui.lookupKey = r.date + '|' + r.stadiumId;
+  renderMatchBox(false);
+  $('#formTitle').textContent = '編輯觀賽紀錄';
+  $('#saveBtn').textContent = '儲存變更';
+  $('#cancelEdit').hidden = false;
+  showFormError('');
+  setGpsStatus('', '');
+  updateForm();
+  showTab('checkin');
+  F.form.scrollIntoView({ behavior:'auto', block:'start' });
+}
+function startCheckinAt(parkId){
+  if (ui.editingId) resetForm();
+  F.park.value = parkId;
+  if (!F.date.value) F.date.value = todayStr();
+  maybeLookup();
+  updateForm();
+  showTab('checkin');
+}
+function onSubmit(e){
+  e.preventDefault();
+  const rec = readForm();
+  const err = validate(rec);
+  if (err){ showFormError(err); return; }
+  showFormError('');
+  if (rec.gameId && GAMES.status === 'ok'){
+    const g = GAMES.byId.get(rec.gameId);
+    if (!g || g.date !== rec.date || g.park !== rec.stadiumId || !gameTeamsMatch(g, rec)) rec.gameId = null;
+  }
+  const now = Date.now();
+  let savedId;
+  if (ui.editingId){
+    const i = state.records.findIndex(r => r.id === ui.editingId);
+    if (i < 0){ resetForm(); return; }
+    state.records[i] = { ...state.records[i], ...rec, updatedAt:now };
+    savedId = ui.editingId;
+    ui.justSavedId = null;
+  } else {
+    savedId = uid();
+    state.records.push({ id:savedId, ...rec, createdAt:now, updatedAt:now });
+    ui.justSavedId = savedId;
+  }
+  const wasEditing = !!ui.editingId;
+  if (!persist()) return;
+  ui.filter = { year:'all', park:'all', result:'all' };
+  resetForm();
+  setGpsStatus('', '');
+  renderAll();
+  showTab('tickets');
+  toast(wasEditing ? '已儲存變更' : '已存入票夾');
+  const card = document.querySelector(`[data-ticket="${CSS.escape(savedId)}"]`);
+  if (card) setTimeout(() => card.scrollIntoView({ behavior: prefersReducedMotion() ? 'auto' : 'smooth', block:'center' }), 60);
+}
+
+/* =========================================================
+   9. 票夾：球票卡片
+   ========================================================= */
+function ticketHTML(r, serial){
+  const st = stadiumById(r.stadiumId);
+  const my = teamById(r.myTeam, r.myTeamName), opp = teamById(r.opponent, r.opponentName);
+  const away = r.myRole === 'away' ? my : opp, home = r.myRole === 'home' ? my : opp;
+  const res = resultOf(r);
+  const awayWin = res && r.awayScore > r.homeScore, homeWin = res && r.homeScore > r.awayScore;
+  const numCls = (score, isWin, otherWin) => score === null ? 'none' : (otherWin ? 'lose' : '');
+  const teamBlock = (t, side, score, isMe, isWin, otherWin) => `
+    <div class="t-team ${side} ${isMe ? 'is-me' : ''}">
+      <span class="t-name">${side === 'home' && isMe ? '<span class="me-tag">我</span>' : ''}<i style="--c:${esc(t.color)}"></i><span class="nm">${esc(t.short)}</span>${side === 'away' && isMe ? '<span class="me-tag">我</span>' : ''}</span>
+      <span class="t-num ${numCls(score, isWin, otherWin)}">${score === null ? '-' : score}</span>
+    </div>`;
+  const rot = -18 + (hashNum(r.id) % 24);
+  const isNew = r.id === ui.justSavedId;
+  const p = r.players || {};
+  const spRow = (p.awaySP || p.homeSP) ? `<div class="t-sp"><span>${esc(p.awaySP)}</span><em>先發</em><span class="h">${esc(p.homeSP)}</span></div>` : '';
+  const dec = [['wp', '勝投'], ['lp', '敗投'], ['sv', '救援'], ['mvp', 'MVP']].filter(([k]) => p[k])
+    .map(([k, label]) => `<span class="${k}"><b>${label}</b>${esc(p[k])}</span>`).join('');
+  const meta = [];
+  if (r.seat) meta.push(`<span>座位 ${esc(r.seat)}</span>`);
+  if (r.link) meta.push(`<a class="t-link" href="${esc(r.link)}" target="_blank" rel="noopener noreferrer">CPBL 官網${ICON.ext}</a>`);
+
+  return `<div class="ticket-wrap" data-ticket="${esc(r.id)}">
+    <article class="ticket" style="--team:${esc(my.color)};--opp:${esc(opp.color)}" aria-label="${esc(fmtDate(r.date))} ${esc(st.name)} ${esc(away.short)} 對 ${esc(home.short)}">
+      <div class="t-main">
+        <div class="t-top">
+          <span class="t-date">${fmtDate(r.date)}<small>週${weekday(r.date)}</small></span>
+          <span class="t-role ${r.myRole}">${r.myRole === 'home' ? '主場' : '客場'}</span>
+        </div>
+        <div class="t-park">${esc(st.name)}</div>
+        <div class="t-score">
+          ${teamBlock(away, 'away', r.awayScore, r.myRole === 'away', awayWin, homeWin)}
+          <span class="t-vs">:</span>
+          ${teamBlock(home, 'home', r.homeScore, r.myRole === 'home', homeWin, awayWin)}
+          ${spRow}
+        </div>
+        ${dec ? `<div class="t-dec">${dec}</div>` : ''}
+        ${meta.length ? `<div class="t-meta">${meta.join('')}</div>` : ''}
+        ${r.notes ? `<p class="t-notes" data-action="expand" title="點一下展開或收合">${esc(r.notes)}</p>` : ''}
+      </div>
+      <div class="t-stub">
+        <span class="stub-no">No.<b>${String(serial).padStart(3, '0')}</b></span>
+        <div class="stamp ${res || 'P'} ${isNew ? 'is-new' : ''}" style="--rot:${rot}deg" role="img" aria-label="${res ? RESULT_LABEL[res] : '未定'}">${stampSVG(res, st.stamp, fmtDate(r.date), r.id)}</div>
+        <span class="stub-seat">${esc(r.seat || '自由座')}</span>
+        <div class="stub-actions">
+          <button type="button" class="icon-btn" data-action="edit" data-id="${esc(r.id)}" aria-label="編輯這張票根" title="編輯">${ICON.edit}</button>
+          <button type="button" class="icon-btn danger" data-action="delete" data-id="${esc(r.id)}" aria-label="刪除這張票根" title="刪除">${ICON.trash}</button>
+        </div>
+      </div>
+    </article>
+  </div>`;
+}
+
+function renderTicketFilters(){
+  const years = Array.from(new Set(state.records.map(r => r.date.slice(0, 4)))).sort().reverse();
+  if (ui.filter.year !== 'all' && !years.includes(ui.filter.year)) ui.filter.year = 'all';
+  $('#fltYear').innerHTML = '<option value="all">全部年份</option>' + years.map(y => `<option value="${y}">${y} 年</option>`).join('');
+  $('#fltYear').value = ui.filter.year;
+  $('#fltPark').innerHTML = '<option value="all">全部球場</option>' + STADIUMS.map(s => `<option value="${s.id}">${esc(s.name)}</option>`).join('');
+  $('#fltPark').value = ui.filter.park;
+  const r = { all:'#fltAll', W:'#fltW', L:'#fltL', T:'#fltT' }[ui.filter.result] || '#fltAll';
+  $(r).checked = true;
+}
+function renderTickets(){
+  renderTicketFilters();
+  const list = $('#ticketList');
+  const toolbar = $('#ticketToolbar');
+
+  if (!state.records.length){
+    toolbar.hidden = true;
+    list.innerHTML = `<div class="empty" style="grid-column:1/-1">
+      <h3>票夾還是空的</h3>
+      <p>到球場按「定位並打卡」，第一張票根就會出現在這裡。</p>
+      <div class="btn-row">
+        <button type="button" class="btn btn-primary" data-action="tab" data-tab="checkin">去打卡</button>
+      </div></div>`;
+    return;
+  }
+  toolbar.hidden = false;
+
+  const serials = new Map([...state.records].sort(chrono).map((r, i) => [r.id, i + 1]));
+  const f = ui.filter;
+  const shown = [...state.records].sort((a, b) => chrono(b, a)).filter(r =>
+    (f.year === 'all' || r.date.startsWith(f.year)) &&
+    (f.park === 'all' || r.stadiumId === f.park) &&
+    (f.result === 'all' || resultOf(r) === f.result));
+
+  const filtered = f.year !== 'all' || f.park !== 'all' || f.result !== 'all';
+  $('#ticketCount').textContent = filtered ? `符合 ${shown.length} 張，共 ${state.records.length} 張` : `共 ${state.records.length} 張票根`;
+
+  if (!shown.length){
+    list.innerHTML = `<div class="empty" style="grid-column:1/-1"><h3>沒有符合條件的票根</h3><p>換個年份、球場或勝敗條件看看。</p>
+      <div class="btn-row"><button type="button" class="btn btn-ghost" data-action="clear-filter">清除篩選</button></div></div>`;
+    return;
+  }
+  const groups = new Map();
+  shown.forEach(r => {
+    const y = r.date.slice(0, 4);
+    if (!groups.has(y)) groups.set(y, []);
+    groups.get(y).push(r);
+  });
+  let html = '';
+  groups.forEach((recs, y) => {
+    const c = { W:0, L:0, T:0 };
+    recs.forEach(r => { const x = resultOf(r); if (x) c[x]++; });
+    html += `<div class="season-head"><h3>${y}</h3><span>${recs.length} 場，${c.W} 勝 ${c.L} 敗 ${c.T} 和</span></div>`;
+    html += recs.map(r => ticketHTML(r, serials.get(r.id))).join('');
+  });
+  list.innerHTML = html;
+  ui.justSavedId = null;
+}
+function openTicketsAt(parkId){
+  ui.filter = { year:'all', park:parkId, result:'all' };
+  renderTickets();
+  showTab('tickets');
+}
+async function deleteRecord(id){
+  const r = state.records.find(x => x.id === id);
+  if (!r) return;
+  const st = stadiumById(r.stadiumId);
+  const my = teamById(r.myTeam, r.myTeamName), opp = teamById(r.opponent, r.opponentName);
+  const v = await ask({
+    title:'刪除這張票根？',
+    text:`${fmtDate(r.date)} ${st.name}\n${my.name} 對 ${opp.name}\n\n刪除後無法復原，除非你有匯出過備份檔。`,
+    actions:[{ label:'取消', value:null }, { label:'刪除', value:'yes', kind:'danger' }]
+  });
+  if (v !== 'yes') return;
+  state.records = state.records.filter(x => x.id !== id);
+  if (ui.editingId === id) resetForm();
+  persist();
+  renderAll({ keepForm:true });
+  toast('已刪除票根');
+}
+
+/* =========================================================
+   10. 設定、自訂球隊
+   ========================================================= */
+function renderGamesMeta(){
+  const el = $('#gamesMeta');
+  if (GAMES.status === 'loading') el.textContent = '讀取中';
+  else if (GAMES.status === 'ok') el.textContent = `已載入 ${GAMES.total} 場中職比賽，資料更新到 ${fmtDate(GAMES.checkedAt || '')}。選好日期和球場會自動帶入對戰、比分與球員；還沒打完的比賽，比分會在每天自動更新後補進票根。`;
+  else el.textContent = '找不到比賽資料檔（data/games.json），目前只能手動填寫。把整個資料夾放上 GitHub Pages 並開啟自動更新後，就會自動帶入。';
+}
+function renderSettings(){
+  renderGamesMeta();
+  $('#setDefaultTeam').innerHTML = teamOptions(state.settings.defaultTeam);
+  $('#setDefaultTeam').value = state.settings.defaultTeam;
+
+  const used = new Set(state.records.flatMap(r => [r.myTeam, r.opponent]));
+  const ct = state.settings.customTeams;
+  $('#customTeamList').innerHTML = ct.length ? ct.map(t => `<li>
+      <i style="--c:${esc(t.color)}"></i><span>${esc(t.name)}</span>
+      <button type="button" class="icon-btn danger" data-action="team-del" data-id="${esc(t.id)}" aria-label="刪除 ${esc(t.name)}" title="${used.has(t.id) ? '已有紀錄使用中' : '刪除'}">${ICON.trash}</button>
+    </li>`).join('') : '<li style="border-style:dashed;color:var(--muted);font-size:14px">目前沒有自訂球隊</li>';
+
+  const last = state.settings.lastBackup;
+  const meta = $('#backupMeta');
+  if (!state.records.length){
+    meta.textContent = '目前沒有紀錄。';
+    meta.className = 'backup-meta';
+  } else if (!last){
+    meta.textContent = `你有 ${state.records.length} 筆紀錄，還沒有匯出過備份。`;
+    meta.className = 'backup-meta warn';
+  } else {
+    const d = new Date(last);
+    const days = Math.floor((Date.now() - d.getTime()) / 86400000);
+    meta.textContent = `上次備份：${d.getFullYear()}/${pad(d.getMonth()+1)}/${pad(d.getDate())} ${pad(d.getHours())}:${pad(d.getMinutes())}` + (days >= 30 ? `，已經 ${days} 天沒備份了` : '');
+    meta.className = 'backup-meta' + (days >= 30 ? ' warn' : '');
+  }
+}
+
+function addCustomTeam(e){
+  e.preventDefault();
+  const name = $('#newTeamName').value.trim();
+  const color = $('#newTeamColor').value;
+  if (!name){ toast('請輸入球隊名稱'); $('#newTeamName').focus(); return; }
+  if (allTeams().some(t => t.name === name)){ toast('已經有同名的球隊'); return; }
+  state.settings.customTeams.push(normalizeTeam({ id:'c_' + Date.now().toString(36), name, color }));
+  persist();
+  $('#newTeamName').value = '';
+  renderAll({ keepForm:true });
+  toast(`已加入 ${name}`);
+}
+async function deleteCustomTeam(id){
+  const t = state.settings.customTeams.find(x => x.id === id);
+  if (!t) return;
+  const count = state.records.filter(r => r.myTeam === id || r.opponent === id).length;
+  if (count){
+    await ask({ title:'這支球隊還在使用中', text:`有 ${count} 筆紀錄用到「${t.name}」。請先修改或刪除那些紀錄，再刪除這支球隊。`, actions:[{ label:'知道了', value:null, primary:true }] });
+    return;
+  }
+  const v = await ask({ title:`刪除「${t.name}」？`, text:'刪除後就不能在表單中選擇這支球隊。', actions:[{ label:'取消', value:null }, { label:'刪除', value:'yes', kind:'danger' }] });
+  if (v !== 'yes') return;
+  state.settings.customTeams = state.settings.customTeams.filter(x => x.id !== id);
+  if (state.settings.defaultTeam === id) state.settings.defaultTeam = 'brothers';
+  persist();
+  renderAll({ keepForm:true });
+  toast('已刪除球隊');
+}
+
+/* =========================================================
+   11. 匯出與匯入
+   ========================================================= */
+function exportJSON(){
+  const now = new Date();
+  const payload = {
+    app:'cpbl-ticket-log', version:1, exportedAt:now.toISOString(),
+    settings:{ defaultTeam:state.settings.defaultTeam, customTeams:state.settings.customTeams },
+    stadiums:STADIUMS.map(s => ({ id:s.id, name:s.name })),
+    records:[...state.records].sort(chrono).map(r => ({ ...r, result: resultOf(r) }))
+  };
+  const blob = new Blob([JSON.stringify(payload, null, 2)], { type:'application/json' });
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement('a');
+  a.href = url;
+  a.download = `BaseballNote備份_${now.getFullYear()}${pad(now.getMonth()+1)}${pad(now.getDate())}.json`;
+  document.body.appendChild(a);
+  a.click();
+  a.remove();
+  setTimeout(() => URL.revokeObjectURL(url), 2000);
+  state.settings.lastBackup = now.toISOString();
+  persist();
+  renderSettings();
+  toast(`已匯出 ${state.records.length} 筆紀錄`);
+}
+async function importJSON(file){
+  let data;
+  try { data = JSON.parse(await file.text()); }
+  catch (e) { toast('這個檔案不是有效的 JSON 備份檔'); return; }
+  const rawRecords = Array.isArray(data) ? data : (data && data.records);
+  if (!Array.isArray(rawRecords)){ toast('檔案裡找不到觀賽紀錄'); return; }
+  const records = rawRecords.filter(x => !(x && x.demo)).map(sanitizeRecord).filter(Boolean);
+  const skipped = rawRecords.length - records.length;
+  const teams = (data && data.settings && Array.isArray(data.settings.customTeams)) ? data.settings.customTeams.filter(validTeam).map(normalizeTeam) : [];
+
+  const v = await ask({
+    title:'匯入備份檔',
+    text:`檔案中有 ${records.length} 筆可用紀錄` + (skipped ? `（${skipped} 筆格式不符，將略過）` : '') + `。\n\n合併：保留目前資料，相同的紀錄以檔案為準。\n取代：清空目前 ${state.records.length} 筆紀錄，改用檔案內容。`,
+    actions:[{ label:'取消', value:null }, { label:'取代', value:'replace', kind:'danger' }, { label:'合併', value:'merge', primary:true }]
+  });
+  if (!v) return;
+
+  const mergedTeams = new Map(state.settings.customTeams.map(t => [t.id, t]));
+  teams.forEach(t => mergedTeams.set(t.id, t));
+  state.settings.customTeams = [...mergedTeams.values()];
+
+  if (v === 'replace'){
+    state.records = records;
+    if (data && data.settings && allTeams().some(t => t.id === data.settings.defaultTeam)) state.settings.defaultTeam = data.settings.defaultTeam;
+  } else {
+    const map = new Map(state.records.map(r => [r.id, r]));
+    records.forEach(r => map.set(r.id, r));
+    state.records = [...map.values()];
+  }
+  if (!persist()) return;
+  ui.filter = { year:'all', park:'all', result:'all' };
+  renderAll();
+  toast(v === 'replace' ? `已還原 ${records.length} 筆紀錄` : `已合併，目前共 ${state.records.length} 筆`);
+}
+async function clearAll(){
+  const v = await ask({
+    title:'清除所有資料？',
+    text:`將刪除 ${state.records.length} 筆紀錄、自訂球隊與設定，無法復原。\n建議先匯出備份檔。`,
+    actions:[{ label:'取消', value:null }, { label:'全部清除', value:'yes', kind:'danger' }]
+  });
+  if (v !== 'yes') return;
+  state.records = [];
+  state.settings = { ...DEFAULT_SETTINGS, customTeams:[] };
+  try { localStorage.removeItem(LS_RECORDS); localStorage.removeItem(LS_SETTINGS); } catch (e) {}
+  renderAll();
+  toast('已清除所有資料');
+}
+
+/* =========================================================
+   12. 繪製全部畫面與事件綁定
+   ========================================================= */
+function renderAll({ keepForm = false } = {}){
+  const s = computeStats();
+  renderBoard(s);
+  renderParkList(s);
+  renderBadges(s);
+  renderMap(s);
+  renderTickets();
+  renderSettings();
+  if (keepForm && !ui.editingId){
+    fillTeamSelects(F.my.value || state.settings.defaultTeam, F.opp.value);
+    updateForm();
+  } else if (!keepForm){
+    if (!ui.editingId) resetForm();
+  }
+}
+
+document.addEventListener('click', e => {
+  const t = e.target.closest('[data-action], .tab');
+  if (!t) return;
+  if (t.classList.contains('tab')){ showTab(t.dataset.tab); return; }
+  const a = t.dataset.action;
+  switch (a){
+    case 'tab': showTab(t.dataset.tab); break;
+    case 'focus-park': focusPark(t.dataset.park); break;
+    case 'pick-park':
+      F.park.value = t.dataset.park;
+      maybeLookup();
+      updateForm();
+      toast(`已選擇 ${stadiumById(t.dataset.park).name}`);
+      break;
+    case 'edit': startEdit(t.dataset.id); break;
+    case 'pick-side': pickSide(t.dataset.team); break;
+    case 'match-pick':
+    case 'match-apply': {
+      const g = GAMES.byId.get(t.dataset.game);
+      if (g){ applyGame(g); drawMatch(g); }
+      break;
+    }
+    case 'match-park': F.park.value = t.dataset.park; maybeLookup(); updateForm(); break;
+    case 'delete': deleteRecord(t.dataset.id); break;
+    case 'expand': t.closest('.ticket').classList.toggle('expanded'); break;
+    case 'clear-filter': ui.filter = { year:'all', park:'all', result:'all' }; renderTickets(); break;
+    case 'export': exportJSON(); break;
+    case 'import': $('#importFile').click(); break;
+    case 'clear-all': clearAll(); break;
+    case 'team-del': deleteCustomTeam(t.dataset.id); break;
+  }
+});
+
+$('#gpsBtn').addEventListener('click', locate);
+F.form.addEventListener('submit', onSubmit);
+$('#cancelEdit').addEventListener('click', () => { resetForm(); showTab('tickets'); });
+F.my.addEventListener('change', () => { syncOpponent(); updateForm(); onTeamsChangedByHand(); });
+[F.opp, F.park, F.date, $('#roleAway'), $('#roleHome')].forEach(el => el.addEventListener('change', updateForm));
+[F.park, F.date].forEach(el => el.addEventListener('change', () => { maybeLookup(); updateForm(); }));
+[F.opp, $('#roleAway'), $('#roleHome')].forEach(el => el.addEventListener('change', onTeamsChangedByHand));
+[F.away, F.home].forEach(el => el.addEventListener('input', updateForm));
+
+$('#fltYear').addEventListener('change', e => { ui.filter.year = e.target.value; renderTickets(); });
+$('#fltPark').addEventListener('change', e => { ui.filter.park = e.target.value; renderTickets(); });
+$$('input[name="flt"]').forEach(el => el.addEventListener('change', e => { ui.filter.result = e.target.value; renderTickets(); }));
+
+$('#setDefaultTeam').addEventListener('change', e => {
+  state.settings.defaultTeam = e.target.value;
+  persist();
+  renderAll({ keepForm:true });
+  if (!ui.editingId){ fillTeamSelects(state.settings.defaultTeam); updateForm(); }
+  toast(`預設支持球隊改為 ${teamById(e.target.value).name}`);
+});
+$('#addTeamForm').addEventListener('submit', addCustomTeam);
+$('#importFile').addEventListener('change', e => {
+  const file = e.target.files && e.target.files[0];
+  e.target.value = '';
+  if (file) importJSON(file);
+});
+
+/* 啟動 */
+loadState();
+fillParkSelect();
+initMap();
+resetForm();
+renderAll();
+showTab((location.hash || '').slice(1) || 'overview', { scroll:false });
+loadGames();
+})();
+</script>
+</body>
+</html>
