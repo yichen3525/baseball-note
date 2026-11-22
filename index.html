@@ -245,12 +245,6 @@ input[type="date"].input{appearance:none;-webkit-appearance:none;display:block}
 .side-btn.on{background:var(--board);border-color:var(--board);color:var(--chalk)}
 .btn-sm{min-height:38px;padding:6px 14px;font-size:14px;margin-top:10px}
 .chip-sub{font-size:12px;color:var(--muted);margin-left:6px}
-.players{border:0;padding:0;margin:0 0 14px;min-width:0}
-.players legend{padding:0;margin-bottom:8px}
-.players-grid{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:10px 12px}
-@media (min-width:620px){.players-grid{grid-template-columns:repeat(3,minmax(0,1fr))}}
-.mini{display:flex;flex-direction:column;gap:4px;font-size:12.5px;color:var(--muted);min-width:0}
-.mini .input{min-height:42px;padding:8px 10px}
 
 /* ---------- Tickets ---------- */
 .toolbar{display:flex;flex-wrap:wrap;gap:10px;align-items:center}
@@ -287,15 +281,8 @@ input[type="date"].input{appearance:none;-webkit-appearance:none;display:block}
 .t-num.lose{color:#A3ADA6}
 .t-num.none{color:#C3CBC5}
 .t-vs{font-family:var(--num);font-size:28px;color:var(--faint);padding-bottom:6px;font-weight:700}
-.t-sp{grid-column:1/-1;display:grid;grid-template-columns:minmax(0,1fr) auto minmax(0,1fr);gap:6px;font-size:12px;color:var(--muted);margin-top:4px;line-height:1.4}
-.t-sp span{white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
-.t-sp .h{text-align:right}
-.t-sp em{font-style:normal;font-size:11px;color:var(--faint)}
-.t-dec{display:flex;flex-wrap:wrap;gap:4px 12px;font-size:12.5px;color:#2E3B34;line-height:1.5}
-.t-dec b{font-weight:600;font-size:10.5px;color:#fff;background:var(--muted);border-radius:4px;padding:1px 5px;margin-right:5px;vertical-align:1px}
-.t-dec .wp b{background:var(--win)}
-.t-dec .lp b{background:var(--loss)}
-.t-dec .mvp b{background:var(--amber);color:var(--board)}
+.t-mvp{display:flex;align-items:center;gap:7px;font-size:13.5px;font-weight:600;color:#2E3B34;line-height:1.5}
+.t-mvp b{font-weight:600;font-size:10.5px;background:var(--amber);color:var(--board);border-radius:4px;padding:1px 6px}
 .t-meta{display:flex;flex-wrap:wrap;gap:4px 14px;font-size:12px;color:var(--muted);align-items:center}
 .t-link{color:var(--loss);font-weight:700;text-decoration:none;display:inline-flex;gap:3px;align-items:center}
 .t-link svg{width:13px;height:13px}
@@ -525,17 +512,10 @@ dialog.modal::backdrop{background:rgba(12,22,17,.55)}
         </div>
         <div class="result-preview" id="resultPreview" aria-live="polite"></div>
 
-        <fieldset class="players">
-          <legend class="field-label">對戰選手 <em>（找到比賽時自動帶入，也可以自己填）</em></legend>
-          <div class="players-grid">
-            <label class="mini"><span id="lblAwaySP">客隊先發</span><input class="input" id="pAwaySP" maxlength="20" autocomplete="off"></label>
-            <label class="mini"><span id="lblHomeSP">主隊先發</span><input class="input" id="pHomeSP" maxlength="20" autocomplete="off"></label>
-            <label class="mini"><span>勝投</span><input class="input" id="pWP" maxlength="20" autocomplete="off"></label>
-            <label class="mini"><span>敗投</span><input class="input" id="pLP" maxlength="20" autocomplete="off"></label>
-            <label class="mini"><span>救援成功</span><input class="input" id="pSV" maxlength="20" autocomplete="off"></label>
-            <label class="mini"><span>MVP</span><input class="input" id="pMVP" maxlength="20" autocomplete="off"></label>
-          </div>
-        </fieldset>
+        <div class="field">
+          <label class="field-label" for="pMVP">單場 MVP <em>（找到比賽時自動帶入）</em></label>
+          <input class="input" id="pMVP" maxlength="20" autocomplete="off" placeholder="球員名字">
+        </div>
 
         <div class="field">
           <label class="field-label" for="fSeat">座位區域</label>
@@ -709,7 +689,7 @@ const DEFAULT_SETTINGS = { defaultTeam:'brothers', customTeams:[], lastBackup:nu
    ========================================================= */
 const state = { records: [], settings: { ...DEFAULT_SETTINGS } };
 const ui = { editingId:null, justSavedId:null, filter:{ year:'all', park:'all', result:'all' },
-             formGameId:null, needSide:false, lookupKey:'', autoLink:'' };
+             formGameId:null, needSide:false, lookupKey:'', autoLink:'', autoMvp:'', formPlayers:null };
 
 const $ = (sel, root=document) => root.querySelector(sel);
 const $$ = (sel, root=document) => Array.from(root.querySelectorAll(sel));
@@ -1152,6 +1132,7 @@ async function loadGames(){
   if (sync.changed){ persist(); renderAll({ keepForm:true }); }
   else renderSettings();
   if (sync.scores) toast(`已依官方賽果補上 ${sync.scores} 場比分`);
+  fillParkSelect();
   ui.lookupKey = '';
   maybeLookup();
 }
@@ -1199,6 +1180,11 @@ function maybeLookup(){
   ui.lookupKey = key;
   ui.formGameId = null;
   ui.needSide = false;
+  if (!ui.editingId){
+    ui.formPlayers = cleanPlayers();
+    if (P.mvp.value === ui.autoMvp) P.mvp.value = '';
+    ui.autoMvp = '';
+  }
   renderMatchBox(!ui.editingId);
 }
 function teamLabel(id, name){ return teamById(id, name).short; }
@@ -1238,13 +1224,7 @@ function renderMatchBox(apply){
   drawMatch(g);
 }
 function playersLine(g){
-  const items = [];
-  if (g.wp) items.push(`勝投<b>${esc(g.wp)}</b>`);
-  if (g.lp) items.push(`敗投<b>${esc(g.lp)}</b>`);
-  if (g.sv) items.push(`救援<b>${esc(g.sv)}</b>`);
-  if (g.mvp) items.push(`MVP<b>${esc(g.mvp)}</b>`);
-  if (!items.length && (g.awaySP || g.homeSP)) items.push(`先發<b>${esc(g.awaySP || '未定')}</b> vs<b>${esc(g.homeSP || '未定')}</b>`);
-  return items.length ? `<div class="match-players">${items.map(x => `<span>${x}</span>`).join('')}</div>` : '';
+  return g.mvp ? `<div class="match-players"><span>MVP<b>${esc(g.mvp)}</b></span></div>` : '';
 }
 function drawMatch(g){
   const box = $('#matchBox');
@@ -1290,7 +1270,9 @@ function applyGame(g){
   }
   F.away.value = g.status === 'final' ? g.awayScore : '';
   F.home.value = g.status === 'final' ? g.homeScore : '';
-  PLAYER_KEYS.forEach(k => { P[k].value = g[k] || ''; });
+  ui.formPlayers = cleanPlayers(g);
+  P.mvp.value = g.mvp || '';
+  ui.autoMvp = P.mvp.value;
   const link = boxLink(g);
   if (link && (!F.link.value || F.link.value === ui.autoLink)){ F.link.value = link; ui.autoLink = link; }
   updateForm();
@@ -1343,8 +1325,9 @@ function locate(){
     const acc = accuracy ? `<small>定位精準度約 ±${Math.round(accuracy)} 公尺</small>` : '';
 
     if (nearest.km < CHECKIN_RADIUS_KM){
-      $('#fPark').value = nearest.st.id;
       $('#fDate').value = todayStr();
+      fillParkSelect();
+      $('#fPark').value = nearest.st.id;
       maybeLookup();
       updateForm();
       const found = ui.formGameId ? '，也找到今天的比賽，請確認下方資訊' : '，接著填對戰組合就好';
@@ -1373,7 +1356,7 @@ const F = {
   form:$('#recordForm'), date:$('#fDate'), park:$('#fPark'), my:$('#fMyTeam'), opp:$('#fOpp'),
   away:$('#awayScore'), home:$('#homeScore'), seat:$('#fSeat'), link:$('#fLink'), notes:$('#fNotes')
 };
-const P = { awaySP:$('#pAwaySP'), homeSP:$('#pHomeSP'), wp:$('#pWP'), lp:$('#pLP'), sv:$('#pSV'), mvp:$('#pMVP') };
+const P = { mvp:$('#pMVP') };
 function formRole(){ return $('#roleHome').checked ? 'home' : 'away'; }
 
 function teamOptions(selectedId, excludeId){
@@ -1383,9 +1366,25 @@ function teamOptions(selectedId, excludeId){
   return builtins + (customs ? `<optgroup label="自訂球隊">${customs}</optgroup>` : '');
 }
 function fillParkSelect(){
-  F.park.innerHTML = '<option value="">請選擇球場</option>' + Object.entries(REGIONS).map(([key, label]) =>
-    `<optgroup label="${label}">${STADIUMS.filter(s => s.region === key).map(s => `<option value="${s.id}">${esc(s.name)}</option>`).join('')}</optgroup>`
-  ).join('');
+  const cur = F.park.value;
+  const date = F.date.value;
+  const games = (GAMES.status === 'ok' && date) ? (GAMES.byDate.get(date) || []).filter(g => g.status !== 'postponed') : [];
+  const playing = [...new Set(games.sort((a, b) => (a.time || '').localeCompare(b.time || '')).map(g => g.park))];
+  let html = '<option value="">請選擇球場</option>';
+  if (playing.length){
+    const [, m, d] = date.split('-').map(Number);
+    html += `<optgroup label="${m}/${d} 有比賽的球場">` + playing.map(id => {
+      const vs = games.filter(g => g.park === id).map(g => `${teamLabel(g.away, g.awayName)} vs ${teamLabel(g.home, g.homeName)}`).join('、');
+      return `<option value="${id}">${esc(stadiumById(id).name)}（${esc(vs)}）</option>`;
+    }).join('') + '</optgroup>';
+  }
+  html += Object.entries(REGIONS).map(([key, label]) => {
+    const list = STADIUMS.filter(s => s.region === key && !playing.includes(s.id));
+    if (!list.length) return '';
+    return `<optgroup label="${playing.length ? '其他球場：' : ''}${label}">${list.map(s => `<option value="${s.id}">${esc(s.name)}</option>`).join('')}</optgroup>`;
+  }).join('');
+  F.park.innerHTML = html;
+  F.park.value = cur;
 }
 function fillTeamSelects(myId, oppId){
   if (!allTeams().some(t => t.id === myId)) myId = state.settings.defaultTeam;
@@ -1408,7 +1407,7 @@ function readForm(){
     myTeamName:my.name, opponentName:opp.name, myRole:formRole(),
     awayScore:toScore(F.away.value), homeScore:toScore(F.home.value),
     seat:F.seat.value.trim(), link:F.link.value.trim(), notes:F.notes.value.trim(),
-    players:Object.fromEntries(PLAYER_KEYS.map(k => [k, P[k].value.trim()])),
+    players:{ ...cleanPlayers(ui.formPlayers), mvp:P.mvp.value.trim() },
     gameId:ui.formGameId || null
   };
 }
@@ -1420,8 +1419,6 @@ function updateForm(){
   $('#homeName').textContent = home.name;
   $('#awaySide').classList.toggle('me', role === 'away');
   $('#homeSide').classList.toggle('me', role === 'home');
-  $('#lblAwaySP').textContent = `${away.short}先發`;
-  $('#lblHomeSP').textContent = `${home.short}先發`;
 
   const rec = readForm();
   const res = resultOf(rec);
@@ -1454,7 +1451,10 @@ function resetForm(){
   ui.editingId = null;
   F.form.reset();
   F.date.value = todayStr();
+  fillParkSelect();
   F.park.value = '';
+  ui.formPlayers = cleanPlayers();
+  ui.autoMvp = '';
   $('#roleAway').checked = true;
   fillTeamSelects(state.settings.defaultTeam);
   $('#formTitle').textContent = '新增觀賽紀錄';
@@ -1473,6 +1473,7 @@ function startEdit(id){
   if (!r) return;
   ui.editingId = id;
   F.date.value = r.date;
+  fillParkSelect();
   F.park.value = r.stadiumId;
   fillTeamSelects(r.myTeam, r.opponent);
   (r.myRole === 'home' ? $('#roleHome') : $('#roleAway')).checked = true;
@@ -1481,7 +1482,9 @@ function startEdit(id){
   F.seat.value = r.seat;
   F.link.value = r.link;
   F.notes.value = r.notes;
-  PLAYER_KEYS.forEach(k => { P[k].value = (r.players && r.players[k]) || ''; });
+  ui.formPlayers = cleanPlayers(r.players);
+  P.mvp.value = ui.formPlayers.mvp;
+  ui.autoMvp = '';
   ui.formGameId = r.gameId || null;
   ui.needSide = false;
   ui.autoLink = '';
@@ -1498,8 +1501,9 @@ function startEdit(id){
 }
 function startCheckinAt(parkId){
   if (ui.editingId) resetForm();
-  F.park.value = parkId;
   if (!F.date.value) F.date.value = todayStr();
+  fillParkSelect();
+  F.park.value = parkId;
   maybeLookup();
   updateForm();
   showTab('checkin');
@@ -1542,6 +1546,20 @@ function onSubmit(e){
 /* =========================================================
    9. 票夾：球票卡片
    ========================================================= */
+/* 官網連結：成績看板，以及同一場的「賽事新聞」（賽事簡報）頁 */
+function cpblLinks(r){
+  const out = { box:r.link || '', news:'' };
+  if (!r.link) return out;
+  try {
+    const u = new URL(r.link);
+    if (/(^|\.)cpbl\.com\.tw$/i.test(u.hostname) && /^\/box/i.test(u.pathname)){
+      const q = name => { for (const [k, v] of u.searchParams) if (k.toLowerCase() === name) return v; return ''; };
+      const sno = q('gamesno');
+      if (sno) out.news = `https://www.cpbl.com.tw/box/news?year=${encodeURIComponent(q('year') || r.date.slice(0, 4))}&kindCode=${encodeURIComponent(q('kindcode') || 'A')}&gameSno=${encodeURIComponent(sno)}`;
+    }
+  } catch (e) {}
+  return out;
+}
 function ticketHTML(r, serial){
   const st = stadiumById(r.stadiumId);
   const my = teamById(r.myTeam, r.myTeamName), opp = teamById(r.opponent, r.opponentName);
@@ -1557,12 +1575,12 @@ function ticketHTML(r, serial){
   const rot = -18 + (hashNum(r.id) % 24);
   const isNew = r.id === ui.justSavedId;
   const p = r.players || {};
-  const spRow = (p.awaySP || p.homeSP) ? `<div class="t-sp"><span>${esc(p.awaySP)}</span><em>先發</em><span class="h">${esc(p.homeSP)}</span></div>` : '';
-  const dec = [['wp', '勝投'], ['lp', '敗投'], ['sv', '救援'], ['mvp', 'MVP']].filter(([k]) => p[k])
-    .map(([k, label]) => `<span class="${k}"><b>${label}</b>${esc(p[k])}</span>`).join('');
+  const mvpRow = (res === 'W' && p.mvp) ? `<div class="t-mvp"><b>MVP</b>${esc(p.mvp)}</div>` : '';
+  const links = cpblLinks(r);
   const meta = [];
   if (r.seat) meta.push(`<span>座位 ${esc(r.seat)}</span>`);
-  if (r.link) meta.push(`<a class="t-link" href="${esc(r.link)}" target="_blank" rel="noopener noreferrer">CPBL 官網${ICON.ext}</a>`);
+  if (links.box) meta.push(`<a class="t-link" href="${esc(links.box)}" target="_blank" rel="noopener noreferrer">CPBL 官網${ICON.ext}</a>`);
+  if (links.news) meta.push(`<a class="t-link" href="${esc(links.news)}" target="_blank" rel="noopener noreferrer">賽事簡報${ICON.ext}</a>`);
 
   return `<div class="ticket-wrap" data-ticket="${esc(r.id)}">
     <article class="ticket" style="--team:${esc(my.color)};--opp:${esc(opp.color)}" aria-label="${esc(fmtDate(r.date))} ${esc(st.name)} ${esc(away.short)} 對 ${esc(home.short)}">
@@ -1576,9 +1594,8 @@ function ticketHTML(r, serial){
           ${teamBlock(away, 'away', r.awayScore, r.myRole === 'away', awayWin, homeWin)}
           <span class="t-vs">:</span>
           ${teamBlock(home, 'home', r.homeScore, r.myRole === 'home', homeWin, awayWin)}
-          ${spRow}
         </div>
-        ${dec ? `<div class="t-dec">${dec}</div>` : ''}
+        ${mvpRow}
         ${meta.length ? `<div class="t-meta">${meta.join('')}</div>` : ''}
         ${r.notes ? `<p class="t-notes" data-action="expand" title="點一下展開或收合">${esc(r.notes)}</p>` : ''}
       </div>
@@ -1872,7 +1889,8 @@ F.form.addEventListener('submit', onSubmit);
 $('#cancelEdit').addEventListener('click', () => { resetForm(); showTab('tickets'); });
 F.my.addEventListener('change', () => { syncOpponent(); updateForm(); onTeamsChangedByHand(); });
 [F.opp, F.park, F.date, $('#roleAway'), $('#roleHome')].forEach(el => el.addEventListener('change', updateForm));
-[F.park, F.date].forEach(el => el.addEventListener('change', () => { maybeLookup(); updateForm(); }));
+F.park.addEventListener('change', () => { maybeLookup(); updateForm(); });
+F.date.addEventListener('change', () => { fillParkSelect(); maybeLookup(); updateForm(); });
 [F.opp, $('#roleAway'), $('#roleHome')].forEach(el => el.addEventListener('change', onTeamsChangedByHand));
 [F.away, F.home].forEach(el => el.addEventListener('input', updateForm));
 
